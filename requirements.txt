@@ -1,0 +1,7 @@
+loguru
+boto3
+botocore
+pandas
+numpy
+requests
+pydantic
