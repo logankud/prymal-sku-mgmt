@@ -29,7 +29,15 @@ jobs:
           pip install -r requirements.txt
   
       - name: Run job
+        env:
+          AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_ACCESS_SECRET: ${{ secrets.AWS_ACCESS_SECRET }}
+          SHIPBOB_API_SECRET: ${{ secrets.SHIPBOB_API_SECRET }}
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+          GLUE_DATABASE_NAME: ${{ secrets.GLUE_DATABASE_NAME }}
         run: src/run.sh
+
+      
   
       - run: echo "Job status - ${{ job.status }}."
   
