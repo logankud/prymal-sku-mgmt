@@ -1,3 +1,4 @@
 *.ipynb
 notebooks/*
 *.csv
+__pychache__/
