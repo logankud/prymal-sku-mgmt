@@ -1,5 +1,7 @@
 from utils import *
 from models import *
+import argparse
+import os
 
 from loguru import logger
 
@@ -9,6 +11,25 @@ from botocore.exceptions import ClientError
 
 
 def main():
+
+  logger.info(os.getcwd())
+
+  parser = argparse.ArgumentParser(
+      description=
+      'Create a Glue table by passing Athena DDL SQL query & Glue database name'
+  )
+
+  parser.add_argument('--path',
+                      type=str,
+                      required=True,
+                      help='Path to DDL (SQL) script to create tables in Glue')
+
+  parser.add_argument('--glue_database',
+                      type=str,
+                      required=True,
+                      help='Name of the Glue database to create tables in')
+
+  args = parser.parse_args()
 
   # -----------------
   # Get AWS params from environment variables
@@ -34,8 +55,7 @@ def main():
   s3_output = f's3://{s3_bucket}/athena_query_results/year={today_y}/month={today_m}/day={today_d}/'  # Output location for query results (default to today's date as a partition)
 
   # Read the SQL file
-  sql_file_path = 'src/ddl.sql'
-  with open(sql_file_path, 'r') as file:
+  with open(args.path, 'r') as file:
     sql_query = file.read()
 
   logger.info(f'SQL query: {sql_query}')
@@ -49,7 +69,7 @@ def main():
 
   run_athena_query_no_results(query=sql_query,
                               bucket=s3_bucket,
-                              database=glue_database,
+                              database=args.glue_database,
                               region=region)
 
   # # -----------------
