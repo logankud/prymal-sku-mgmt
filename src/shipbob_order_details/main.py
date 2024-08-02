@@ -3,6 +3,10 @@ import argparse
 import pytz
 from datetime import datetime, timedelta
 
+import sys
+
+sys.path.append('src/')  # updating path back to root for importing modules
+
 from utils import *
 from models import *
 
