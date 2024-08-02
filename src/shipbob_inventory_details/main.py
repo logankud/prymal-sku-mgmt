@@ -84,7 +84,9 @@ def main():
             logger.info(pd.DataFrame(valid_data))
 
             # define path to write to
-            today = pd.to_datetime('today').strftime('%Y-%m-%d')
+            today = pd.to_datetime(
+                pd.to_datetime('today') -
+                timedelta(hours=4)).strftime('%Y-%m-%d')
             s3_prefix = f"shipbob/inventory_details/partition_date={today}/shipbob_inventory_details_{today.replace('-','_')}.csv"
 
             try:
