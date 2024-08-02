@@ -140,13 +140,14 @@ def run_athena_query_no_results(bucket: str, query: str, database: str,
         # Handle any other unexpected exceptions
 
 
-def run_athena_query(query: str, database: str, region: str):
+def run_athena_query(query: str, database: str, region: str, s3_bucket: str):
     """Function to execute an athena query & return results csv as a dataframe
 
     Args:
         query (str): The query to be executed
         database (str): The Glue database to be queried
         region (str): The AWSregion to be queried
+        s3_bucket (str) : S3 bucket name for query results
     Returns:
         (pd.DataFrame): The results of the query as a dataframe
     """
@@ -164,7 +165,7 @@ def run_athena_query(query: str, database: str, region: str):
             QueryExecutionContext={'Database': database},
             ResultConfiguration={
                 'OutputLocation':
-                's3://{s3_bucket}/athena_query_results/'  # Specify your S3 bucket for query results
+                f's3://{s3_bucket}/athena_query_results/'  # Specify your S3 bucket for query results
             })
 
         query_execution_id = response['QueryExecutionId']
@@ -205,7 +206,7 @@ def run_athena_query(query: str, database: str, region: str):
 
         # Convert data rows into a list of lists
         query_results_data = [[
-            r['VarCharValue'] if 'VarCharValue' in r else np.NaN
+            r['VarCharValue'] if 'VarCharValue' in r else np.nan
             for r in row['Data']
         ] for row in data_rows]
 
@@ -221,7 +222,7 @@ def run_athena_query(query: str, database: str, region: str):
 
             # Convert data rows into a list of lists
             query_results_data.extend([[
-                r['VarCharValue'] if 'VarCharValue' in r else np.NaN
+                r['VarCharValue'] if 'VarCharValue' in r else np.nan
                 for r in row['Data']
             ] for row in data_rows])
 
@@ -450,6 +451,75 @@ def list_all_shipbob_products(api_secret: str):
         current_page = response.headers['Page-Number']
 
     return product_to_inventory_df.reset_index(drop=True)
+
+
+def get_shipbob_inventory(api_secret: str):
+    """
+    GET details (ie. sku) for current inventory in Shipbob
+
+    Parameters
+    ----------
+    api_secret : str
+        API secret (PAT token generated in Shipbob)
+
+    Returns
+    -------
+    pd.DataFrame
+        Dataframe containing all SKUs and their current inventory levels per ShipBob
+    """
+
+    url = 'https://api.shipbob.com'
+    url_params = '/1.0/inventory'
+
+    # Set up the request headers with the Bearer token
+    headers = {"Authorization": f"Bearer {api_secret}"}
+
+    # Send the GET request
+    response = requests.get(url + url_params, headers=headers)
+
+    # convert to json
+    response_json = json.loads(response.text)
+
+    # normalize to df
+    results_df = pd.json_normalize(response_json)
+
+    # Extract page details
+    current_page = response.headers['Page-Number']
+    total_pages = response.headers['Total-Pages']
+
+    while 'Next-Page' in response.headers and int(current_page) <= int(
+            total_pages):
+
+        logger.info(f'Page {current_page} of {total_pages} retrieved')
+
+        url_params = response.headers['Next-Page']
+
+        # Send the GET request
+        response = requests.get(url + url_params, headers=headers)
+
+        # convert to json
+        response_json = json.loads(response.text)
+
+        # normalize to df
+        response_df = pd.json_normalize(response_json)
+
+        # Extract page details
+        current_page = response.headers['Page-Number']
+
+        # Append results
+        results_df = pd.concat([results_df, response_df])
+
+        logger.info(f'Total results retrived: {results_df.shape[0]}')
+
+    # Subset of columns 
+    results_df = results_df[['id', 'name', 'is_digital', 'is_case_pick', 'is_lot',
+       'total_fulfillable_quantity', 'total_onhand_quantity',
+       'total_committed_quantity', 'total_sellable_quantity',
+       'total_awaiting_quantity', 'total_exception_quantity',
+       'total_internal_transfer_quantity', 'total_backordered_quantity',
+       'is_active']].copy()
+
+    return results_df
 
 
 def get_shipbob_orders_by_date(api_secret: str, start_date: str,
