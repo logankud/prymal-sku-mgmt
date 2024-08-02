@@ -42,3 +42,20 @@ class ShipbobOrderDetails(BaseModel):
 
     raise ValueError(
         f"{cls} must be a datetime object or a string in ISO 8601 format")
+
+
+class ShipbobInventory(BaseModel):
+  id: int
+  name: str
+  is_digital: bool
+  is_case_pick: bool
+  is_lot: bool
+  total_fulfillable_quantity: int
+  total_onhand_quantity: int
+  total_committed_quantity: int
+  total_sellable_quantity: int
+  total_awaiting_quantity: int
+  total_exception_quantity: int
+  total_internal_transfer_quantity: int
+  total_backordered_quantity: int
+  is_active: bool
