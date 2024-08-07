@@ -4,7 +4,8 @@ CREATE EXTERNAL TABLE IF NOT EXISTS shipbob_inventory_run_rate (
     name string,
     total_fulfillable_quantity int,
     est_stock_days_on_hand double,
-    estimated_stockout_date date
+    estimated_stockout_date date,
+    restock_point int
 )
 PARTITIONED BY (
     partition_date date

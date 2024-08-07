@@ -60,6 +60,7 @@ class ShipbobInventory(BaseModel):
   total_backordered_quantity: int
   is_active: bool
 
+
 class DailyRunRate(BaseModel):
   inventory_id: int
   run_rate: float
@@ -67,3 +68,4 @@ class DailyRunRate(BaseModel):
   total_fulfillable_quantity: int
   est_stock_days_on_hand: float
   estimated_stockout_date: datetime
+  restock_point: int
