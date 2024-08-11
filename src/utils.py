@@ -37,7 +37,10 @@ def write_df_to_s3(bucket, key, df, s3_client):
     # Use s3 client to write dataframe to S3 as csv
     try:
         csv_buffer = StringIO()
-        df.to_csv(csv_buffer, index=False)
+        df.to_csv(csv_buffer,
+                  index=False,
+                  quotechar='"',
+                  quoting=csv.QUOTE_NONNUMERIC)
         csv_buffer.seek(0)
         response = s3_client.put_object(Body=csv_buffer.read(),
                                         Bucket=bucket,
@@ -511,13 +514,15 @@ def get_shipbob_inventory(api_secret: str):
 
         logger.info(f'Total results retrived: {results_df.shape[0]}')
 
-    # Subset of columns 
-    results_df = results_df[['id', 'name', 'is_digital', 'is_case_pick', 'is_lot',
-       'total_fulfillable_quantity', 'total_onhand_quantity',
-       'total_committed_quantity', 'total_sellable_quantity',
-       'total_awaiting_quantity', 'total_exception_quantity',
-       'total_internal_transfer_quantity', 'total_backordered_quantity',
-       'is_active']].copy()
+    # Subset of columns
+    results_df = results_df[[
+        'id', 'name', 'is_digital', 'is_case_pick', 'is_lot',
+        'total_fulfillable_quantity', 'total_onhand_quantity',
+        'total_committed_quantity', 'total_sellable_quantity',
+        'total_awaiting_quantity', 'total_exception_quantity',
+        'total_internal_transfer_quantity', 'total_backordered_quantity',
+        'is_active'
+    ]].copy()
 
     return results_df
 
@@ -868,3 +873,6 @@ def create_glue_table(region: str, database_name: str, table_name: str,
         print(f"Table {table_name} already exists")
     except Exception as e:
         print(f"Error creating table: {str(e)}")
+
+
+# def list_active_shopify_products():
