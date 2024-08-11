@@ -18,6 +18,27 @@ from pydantic import BaseModel, ValidationError
 AWS_ACCESS_KEY_ID = os.environ['AWS_ACCESS_KEY']
 AWS_SECRET_ACCESS_KEY = os.environ['AWS_ACCESS_SECRET']
 
+def format_df_for_s3(df: pd.DataFrame):
+    """Format dataframe to be written to s3 as a csv (and avoid delimeter issues)
+
+    Replace quote char (") with single quotes, new line ('\n') with '  ', and delimeter char (',') 
+        with ';' in string column values
+    
+    Args:
+        df (pd.DataFrame): Dataframe to be written to s3
+        
+    Returns:
+        df (pd.DataFrame): Formatted dataframe"""
+
+    logger.info(f'Formating dataframe for writing to s3 as csv')
+
+    
+    for col in df.columns:
+        if df[col].dtype == 'object':
+            df[col] = df[col].apply(lambda x: x.replace('"', "'") if isinstance(x, str) else x)
+            df[col] = df[col].apply(lambda x: x.replace('\n', ' ') if isinstance(x, str) else x)
+            df[col] = df[col].apply(lambda x: x.replace(',', ';') if isinstance(x, str) else x)
+    return df
 
 def write_df_to_s3(bucket, key, df, s3_client):
     """
@@ -33,6 +54,17 @@ def write_df_to_s3(bucket, key, df, s3_client):
         None
     """
 
+    try:
+            
+        # Format to avoid delimeter issues
+        df = format_df_for_s3(df)
+
+    except Exception as e:
+        logger.error(f'Error formatting dataframe for writing to s3: {str(e)}')
+        # Raise exception to stop execution
+        raise ValueError(f'Error formatting dataframe for writing to s3! {str(e)}')
+        
+    logger.info(df.dtypes)
     logger.info(f'Writing df to csv {key}')
 
     # Use s3 client to write dataframe to S3 as csv
@@ -40,12 +72,13 @@ def write_df_to_s3(bucket, key, df, s3_client):
         csv_buffer = StringIO()
         df.to_csv(csv_buffer,
                   index=False,
-                  quotechar='"',
-                  quoting=csv.QUOTE_NONNUMERIC)
+                  encoding='utf-8')
         csv_buffer.seek(0)
-        response = s3_client.put_object(Body=csv_buffer.read(),
+
+        response = s3_client.put_object(Body=csv_buffer.getvalue(),
                                         Bucket=bucket,
-                                        Key=key)
+                                        Key=key,
+                                        ContentType='text/csv')
         logger.info(f'Response: {response}')
     except BotoCoreError as e:
         logger.error(f'BotoCore Error: {e}')
