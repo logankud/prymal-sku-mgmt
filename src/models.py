@@ -1,5 +1,5 @@
 from typing import Any, List, Tuple, Type, Optional, Dict
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, validator
 from datetime import datetime
 from loguru import logger
 
@@ -69,3 +69,17 @@ class DailyRunRate(BaseModel):
   est_stock_days_on_hand: float
   estimated_stockout_date: datetime
   restock_point: int
+
+class ShopifyProductVariantDetails(BaseModel):
+  product_id: int
+  product_title: str
+  variant_id: int
+  variant_title: str
+  variant_sku: str
+  inventory_quantity: float
+  published_at: datetime
+
+  @validator('inventory_quantity')
+  def quantity_must_be_non_negative(cls, value):
+      assert value >= 0, 'inventory_quantity must be non-negative'
+      return value
