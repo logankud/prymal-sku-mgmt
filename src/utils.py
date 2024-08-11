@@ -8,6 +8,7 @@ import requests
 import json
 import pandas as pd
 import numpy as np
+import csv
 import datetime
 from datetime import timedelta
 from typing import Any, List, Tuple, Type, Dict, get_origin, get_args
@@ -875,4 +876,77 @@ def create_glue_table(region: str, database_name: str, table_name: str,
         print(f"Error creating table: {str(e)}")
 
 
-# def list_active_shopify_products():
+def list_active_shopify_variant_skus(shopify_api_key: str, shopify_api_pw: str,
+                                     shopify_store_url: str):
+    """
+    List details for all active product SKUs from a Shopify store as of right now.  
+
+    Active variant SKU defined as the SKU of a variant that both:
+    1) currently is assigned > 0 inventory quantity 
+    2) is a child variant to a parent product that contains a 'published_at' date (if 'published_at' is null, the product is not an active listing on the shopify store)
+
+    Args:
+        shopify_api_key (str): Shopify API key
+        shopify_api_pw (str): Shopify API password
+        shopify_store_url (str): Shopify store URL
+
+    Returns:
+        Dict[str]: Details of active product SKUs"""
+
+    # ====================== QUERY DATA =============================================
+
+    # API URL
+    base_url = f'https://{shopify_api_key}:{shopify_api_pw}@{shopify_store_url}'
+    url = f'{base_url}/admin/api/2021-10/products.json'
+
+    # Make the API request
+    response = requests.get(url)
+    data = response.json()
+
+    # Extract products dict
+    products = data['products']
+
+    # Loop through all products and return the active sku details
+    i = 0
+    while True:  # Pagination
+        i += 1
+        logger.info(f'Paginating - {i}')
+        logger.info(url)
+        response = requests.get(url)
+        data = response.json()
+        products.extend(data['products'])
+
+        links = response.links
+        if 'next' in links:
+            url = links['next']['url']
+            url = url.replace('https://',
+                              f'https://{shopify_api_key}:{shopify_api_pw}@')
+        else:
+            break
+
+    # active_products = [product for product in products if product['status'] == 'active']
+
+    # Iterate through all product dicts & retain only active skus
+    active_shopify_variant_sku_dict = []
+    for product in products:  # iterate through each product
+        for variant in product[
+                'variants']:  # iterate through each variant of each product
+            if variant['inventory_quantity'] > 0 and product['published_at']:
+                active_shopify_variant_sku_dict.append({
+                    'product_id':
+                    product['id'],
+                    'product_title':
+                    product['title'],
+                    'variant_id':
+                    variant['id'],
+                    'variant_title':
+                    variant['title'],
+                    'variant_sku':
+                    variant['sku'],
+                    'inventory_quantity':
+                    variant['inventory_quantity'],
+                    'published_at':
+                    product['published_at']
+                })
+
+    return active_shopify_variant_sku_dict
