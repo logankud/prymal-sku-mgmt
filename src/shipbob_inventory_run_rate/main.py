@@ -1,7 +1,6 @@
 from loguru import logger
 import pytz
 from datetime import datetime, timedelta
-import plotly.express as px
 import argparse
 
 import sys
@@ -131,8 +130,7 @@ def main():
         shipbob_order_details_df['inventory_qty'] = shipbob_order_details_df[
             'inventory_qty'].fillna(0).astype(int)
         shipbob_order_details_df['active_sku_fl'] = shipbob_order_details_df[
-        'active_sku_fl'].astype(int)
-        
+            'active_sku_fl'].astype(int)
 
         # ------
         #  Shipbob Inventory Data
@@ -284,9 +282,10 @@ def main():
             on='inventory_id')
 
         # Replace null values
-        daily_metrics_df['total_fulfillable_quantity'] = daily_metrics_df['total_fulfillable_quantity'].fillna(
-            0)
-        daily_metrics_df['name'] = daily_metrics_df['name'].fillna('INVENTORY_ID_NOT_IN_INVENTORY_DETAILS')
+        daily_metrics_df['total_fulfillable_quantity'] = daily_metrics_df[
+            'total_fulfillable_quantity'].fillna(0)
+        daily_metrics_df['name'] = daily_metrics_df['name'].fillna(
+            'INVENTORY_ID_NOT_IN_INVENTORY_DETAILS')
 
         # Calculate estimated days of stock onhand & estimated stockout date
         daily_metrics_df['est_stock_days_on_hand'] = (
@@ -299,9 +298,11 @@ def main():
             'est_stock_days_on_hand'].apply(lambda x: min(x, 365))
 
         # Calculate estimated stockout date
-        daily_metrics_df['estimated_stockout_date'] = daily_metrics_df['est_stock_days_on_hand'].apply(
-            lambda x: pd.to_datetime('today') + timedelta(int(x)) if not pd.isna(x) else pd.to_datetime('today')  # Handle NaN
-        ).fillna(pd.to_datetime('today'))  # Fill NaN with today's date
+        daily_metrics_df['estimated_stockout_date'] = daily_metrics_df[
+            'est_stock_days_on_hand'].apply(
+                lambda x: pd.to_datetime('today') + timedelta(int(x))
+                if not pd.isna(x) else pd.to_datetime('today')  # Handle NaN
+            ).fillna(pd.to_datetime('today'))  # Fill NaN with today's date
 
         # Calculate restock point
         production_lead_time = 7  # number of days for a new production run
@@ -309,7 +310,6 @@ def main():
         daily_metrics_df['restock_point'] = daily_metrics_df['run_rate'].apply(
             lambda x: (x * production_lead_time) +
             (x * safety_stock_days)).astype(int)
-
 
         # fig = px.line(daily_qty_sold_df,
         #              x='order_date',
@@ -328,8 +328,8 @@ def main():
         # ====================== VALIDATE DATA & WRITE TO S3 ============================================
 
         # Validate data w/ Pydantic
-        valid_data, invalid_data = validate_dataframe(
-            daily_metrics_df, DailyRunRate)
+        valid_data, invalid_data = validate_dataframe(daily_metrics_df,
+                                                      DailyRunRate)
 
         logger.info(f'Total records in df: {len(daily_metrics_df)}')
         logger.info(f'Total records in valid_data: {len(valid_data)}')
@@ -346,8 +346,7 @@ def main():
             logger.info(f'Attempting to write valid data to s3..')
 
             # define path to write to
-            partition_date = pd.to_datetime(start_date).strftime(
-                '%Y-%m-%d')
+            partition_date = pd.to_datetime(start_date).strftime('%Y-%m-%d')
 
             s3_prefix = f"shipbob/inventory_run_rate/partition_date={partition_date}/shipbob_inventory_run_rate_{partition_date.replace('-','_')}.csv"
 
@@ -371,8 +370,7 @@ def main():
                 raise ValueError(f'Error writing data! {str(e)}')
 
         logger.info(
-            f'Finished writing daily run rate data to s3 for {start_date}!'
-        )
+            f'Finished writing daily run rate data to s3 for {start_date}!')
 
         # -----------------
         # Run Athena query to update partitions
