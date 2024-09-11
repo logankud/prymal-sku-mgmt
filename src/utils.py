@@ -12,6 +12,7 @@ import csv
 import datetime
 from datetime import timedelta
 from typing import Any, List, Tuple, Type, Dict, get_origin, get_args
+import re
 
 from pydantic import BaseModel, ValidationError
 
@@ -983,3 +984,46 @@ def list_active_shopify_variant_skus(shopify_api_key: str, shopify_api_pw: str,
                 })
 
     return active_shopify_variant_sku_dict
+
+def clean_column_name(col_name):
+    """Function to format column names for Glue tables"""
+    
+    # Remove special characters, replace spaces and multiple non-alphanumeric characters with a single underscore
+    col_name = re.sub(r'[^\w]+', '_', col_name)
+    # Convert to lowercase
+    col_name = col_name.lower()
+    # Strip any leading/trailing underscores that may be left after the substitution
+    col_name = col_name.strip('_')
+    
+    return col_name
+
+# Function (with docstring args) to create an SNS client and publish a message to a topic
+def send_sns_alert(message, topic_arn, subject, region):
+    """
+    Function to create an SNS client and publish a message to a topic
+    Args:
+        message (str): Message to send to SNS topic
+        topic_arn (str): ARN of SNS topic to send message to
+        subject (str): Subject of SNS message
+    """
+
+    # Instantiate SNS client
+    sns_client = boto3.client('sns',
+                              region_name=region,
+                              aws_access_key_id=AWS_ACCESS_KEY_ID,
+                              aws_secret_access_key=AWS_SECRET_ACCESS_KEY)
+
+    # Publish message to SNS topic
+    try:
+        response = sns_client.publish(
+            TopicArn=topic_arn,
+            Message=message,
+            Subject=subject,
+        )
+
+        logger.info(f'SNS Publish response: {response}')
+
+    except ClientError as e:
+        logger.error(f'Error sending SNS alert: {str(e)}')
+        raise ValueError(f'Error sending SNS alert! {str(e)}')
+
