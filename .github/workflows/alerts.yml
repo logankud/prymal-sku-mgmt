@@ -7,7 +7,7 @@ on:
 
 
 jobs:
-  katana_raw_material_run_rate:
+  sku_mgmt_alerts:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repo code
