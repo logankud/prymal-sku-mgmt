@@ -22,6 +22,8 @@ def main():
     s3_bucket = os.getenv('S3_BUCKET_NAME')
     alert_topic_arn = os.getenv('ALERT_TOPIC_ARN')
 
+    logger.info(f'Alert Topic ARN {alert_topic_arn}')
+
     # ====================== QUERY DATA =============================================
 
     # Configure Athena / Glue
