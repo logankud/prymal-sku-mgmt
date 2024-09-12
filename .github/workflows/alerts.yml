@@ -34,6 +34,7 @@ jobs:
           AWS_ACCESS_SECRET: ${{ secrets.AWS_ACCESS_SECRET }}
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
           GLUE_DATABASE_NAME: ${{ secrets.GLUE_DATABASE_NAME }}
+          ALERT_TOPIC_ARN: ${{ secrets.ALERT_TOPIC_ARN }}
         run: src/alerts/run.sh
   
       - run: echo "Job status - ${{ job.status }}."
