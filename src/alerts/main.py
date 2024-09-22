@@ -24,7 +24,7 @@ def main():
 
     logger.info(f'Alert Topic ARN {alert_topic_arn}')
 
-    # ====================== QUERY DATA =============================================
+    # ====================== QUERY DATA - Katana Raw Material Status =============================================
 
     # Configure Athena / Glue
     database = os.getenv('GLUE_DATABASE_NAME')
@@ -55,30 +55,6 @@ def main():
     logger.info(katana_raw_material_status_df.head())
 
     
-
-    # # ------
-    # #  Katana Raw Material Inventory
-    # # ------
-
-    # # Athena Query to pull latest partition of Katana inventory data
-    # query = """
-    
-    # SELECT * 
-    # , partition_date as planned_qty_as_of
-    # FROM "prymal"."katana_open_manufacturing_orders"
-    # WHERE partition_date = (SELECT MAX(partition_date) FROM "prymal"."katana_open_manufacturing_orders")
-    
-    # """
-
-    # logger.info(query)
-
-    # open_mo_df = run_athena_query(query, database, region, s3_bucket)
-
-    # # Update data types
-    # open_mo_df['planned_quantity_of_ingredient'] = open_mo_df[
-    #     'planned_quantity_of_ingredient'].fillna(0.0).astype(float)
-
-    
     # # ------------------- CHECK IF ANY RAW MATERIALS NEED REPLENISHED -------------------
 
     # Filter to only include raw materials that need replenished 
@@ -107,73 +83,77 @@ def main():
                    subject=alert_subject, 
                   region=region)
     
+    # ====================== QUERY DATA - Shipbob Inventory Run Rate =============================================
+
+    # ------
+    #  Shipbop Inventory Run Rate
+    # ------
+
+    # Athena Query to pull latest partition of Katana inventory data
+    query = """
+    
+    SELECT *  
+    FROM "prymal"."shipbob_inventory_run_rate"
+    WHERE partition_date = (SELECT MAX(partition_date) FROM "prymal"."shipbob_inventory_run_rate")   -- latest partition
+    AND est_stock_days_on_hand < 45   -- only include products with < X days of stock on hand
+    
+    """
+
+    logger.info(query)
+
+    shipbob_inventory_run_rate_df = run_athena_query(query, database, region, s3_bucket)
+
+    # Update data types
+    shipbob_inventory_run_rate_df['partition_date'] = pd.to_datetime(shipbob_inventory_run_rate_df['partition_date']).dt.strftime('%Y-%m-%d')
+    shipbob_inventory_run_rate_df['run_rate'] = shipbob_inventory_run_rate_df['run_rate'].astype(float)
+    shipbob_inventory_run_rate_df['est_stock_days_on_hand'] = shipbob_inventory_run_rate_df['est_stock_days_on_hand'].astype(float)
+    shipbob_inventory_run_rate_df['total_fulfillable_quantity'] = shipbob_inventory_run_rate_df['total_fulfillable_quantity'].astype(int)
+    shipbob_inventory_run_rate_df['restock_point'] = shipbob_inventory_run_rate_df['restock_point'].astype(int)
+    
+
+    logger.info(shipbob_inventory_run_rate_df.columns)
+    logger.info(shipbob_inventory_run_rate_df.head())
+
+
+    # # ------------------- CHECK FOR FINISHED GOODS NEEDING REPLENISHED -------------------
+
+    # Calcualte restock_amount (to replenish 60 days of inventory based on run rate & stock on hand)
+    shipbob_inventory_run_rate_df['restock_amount'] = (shipbob_inventory_run_rate_df['run_rate'] * shipbob_inventory_run_rate_df['est_stock_days_on_hand'].apply(lambda x: int(60 - x))).astype(int)
+
+    # Filter to only include finished goods that need replenished
+    products_needing_restocked = shipbob_inventory_run_rate_df.loc[shipbob_inventory_run_rate_df['restock_amount'] > 0].copy()
+
+    # If there are products needing replenished, format for alerting to SNS topic w/ SNS client
+    if len(products_needing_restocked) > 0:
+        
+        # # ------------------- SEND SNS ALERT -------------------
+    
+        # Format for alerting to SNS topic w/ SNS client
+        alert_message = "URGENT: Product Replenishment Required\n\n"
+        alert_message += "The following products need to be replenished:\n\n"
+    
+        # Iterate through records where 
+        for _, row in products_needing_restocked.iterrows():
+            alert_message += f"• {row['name']}:\n"
+            alert_message += f"  - Current stock: {row['total_fulfillable_quantity']}\n"
+            alert_message += f"  - Estimated stockout date: {row['estimated_stockout_date']}\n"
+            alert_message += f"  - Quantity to restock: {int(row['run_rate'] * (60 - row['est_stock_days_on_hand']))}\n\n"
+        
             
-
-    # ------------------- VALIDATE DATA - katana_raw_material_status -------------------
-
-    # Validate data w/ Pydantic
-    valid_data, invalid_data = validate_dataframe(katana_raw_material_status_df,
-                                                 RawMaterialStatus)
-
-    logger.info(f'Total records in formulas_df: {len(katana_raw_material_status_df)}')
-    logger.info(f'Total records in valid_data: {len(valid_data)}')
-    logger.info(f'Total records in invalid_data: {len(invalid_data)}')
-
-    if len(invalid_data) > 0:
-        for invalid in invalid_data:
-            logger.error(f'Invalid data: {invalid}')
-
-            raise ValueError(f'Invalid data!')
-
-    if len(valid_data) > 0:
-
-        logger.info(valid_data)
-        logger.info(pd.DataFrame(valid_data))
+        logger.info(alert_message)
+        
+        # ------------------- SEND SNS ALERT -------------------
+        
+        alert_subject = 'Finished Products Needing Replenished'
+        
+        send_sns_alert(message=alert_message, 
+                       topic_arn=alert_topic_arn, 
+                       subject=alert_subject, 
+                      region=region)
+        
 
 
-
-    #     # ------------------- WRITE TO S3 - katana_raw_material_status -------------------
-
-    #     # Instantiate s3 client
-    #     s3_client = boto3.client('s3',
-    #                              region_name=region,
-    #                              aws_access_key_id=AWS_ACCESS_KEY_ID,
-    #                              aws_secret_access_key=AWS_SECRET_ACCESS_KEY)
-
-    #     # define path to write to
-    #     today = pd.to_datetime(
-    #         pd.to_datetime('today') -
-    #         timedelta(hours=4)).strftime('%Y-%m-%d')
-    #     s3_prefix = f"katana/raw_material_status/partition_date={today}/katana_raw_material_status_{today.replace('-','_')}.csv"
-
-    #     try:
-    #         # Write to s3
-    #         write_df_to_s3(bucket=s3_bucket,
-    #                        key=s3_prefix,
-    #                        df=pd.DataFrame(valid_data),
-    #                        s3_client=s3_client)
-
-    #     except Exception as e:
-    #         logger.error(f'Error writing to s3: {str(e)}')
-    #         raise ValueError(f'Error writing data! {str(e)}')
-
-    # logger.info(f'Finished validating data & writing to s3!')
-
-    # # -----------------
-    # # Run Athena query to update partitions - katana_open_manufacturing_orders
-    # # -----------------
-    # logger.info('Running MKSCK REPAIR TABLE to update partitions')
-
-    # # Define SQL query
-    # sql_query = """MSCK REPAIR TABLE katana_raw_material_status"""
-
-    # logger.info(f'SQL query: {sql_query}')
-
-    # run_athena_query_no_results(query=sql_query,
-    #                             bucket=s3_bucket,
-    #                             database=glue_database,
-    #                             region=region)
-
+    
 
 if __name__ == "__main__":
 
