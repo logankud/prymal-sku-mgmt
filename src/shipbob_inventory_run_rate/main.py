@@ -305,10 +305,10 @@ def main():
             ).fillna(pd.to_datetime('today'))  # Fill NaN with today's date
 
         # Calculate restock point
-        production_lead_time = 7  # number of days for a new production run
+        raw_material_max_lead_time = 70  # number of days for the longest raw material lead time (10 weeks as of 10/1/24)
         safety_stock_days = 7  # number of days of stock to keep as a safety stock
         daily_metrics_df['restock_point'] = daily_metrics_df['run_rate'].apply(
-            lambda x: (x * production_lead_time) +
+            lambda x: (x * raw_material_max_lead_time) +
             (x * safety_stock_days)).astype(int)
 
         # fig = px.line(daily_qty_sold_df,
