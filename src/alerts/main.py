@@ -138,7 +138,7 @@ def main():
     shipbob_inventory_run_rate_df['restock_amount'] = (
         shipbob_inventory_run_rate_df['run_rate'] *
         shipbob_inventory_run_rate_df['est_stock_days_on_hand'].apply(
-            lambda x: int(60 - x))).astype(int)
+            lambda x: int(90 - x))).astype(int)
 
     # Filter to only include finished goods that need replenished
     products_needing_restocked = shipbob_inventory_run_rate_df.loc[
