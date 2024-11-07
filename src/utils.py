@@ -608,7 +608,7 @@ def get_shipbob_orders_by_date(api_secret: str, start_date: str,
     count = 0
     while url:   # while there are more pages of results
 
-        print(f"Fetching: {url}")
+        logger.info(f"Fetching: {url}")
         response = requests.get(url, headers=headers)
 
         # Convert to json
