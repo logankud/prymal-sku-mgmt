@@ -19,6 +19,7 @@ from pydantic import BaseModel, ValidationError
 AWS_ACCESS_KEY_ID = os.environ['AWS_ACCESS_KEY']
 AWS_SECRET_ACCESS_KEY = os.environ['AWS_ACCESS_SECRET']
 
+
 def format_df_for_s3(df: pd.DataFrame):
     """Format dataframe to be written to s3 as a csv (and avoid delimeter issues)
 
@@ -33,13 +34,16 @@ def format_df_for_s3(df: pd.DataFrame):
 
     logger.info(f'Formating dataframe for writing to s3 as csv')
 
-    
     for col in df.columns:
         if df[col].dtype == 'object':
-            df[col] = df[col].apply(lambda x: x.replace('"', "'") if isinstance(x, str) else x)
-            df[col] = df[col].apply(lambda x: x.replace('\n', ' ') if isinstance(x, str) else x)
-            df[col] = df[col].apply(lambda x: x.replace(',', ';') if isinstance(x, str) else x)
+            df[col] = df[col].apply(lambda x: x.replace('"', "'")
+                                    if isinstance(x, str) else x)
+            df[col] = df[col].apply(lambda x: x.replace('\n', ' ')
+                                    if isinstance(x, str) else x)
+            df[col] = df[col].apply(lambda x: x.replace(',', ';')
+                                    if isinstance(x, str) else x)
     return df
+
 
 def write_df_to_s3(bucket, key, df, s3_client):
     """
@@ -56,24 +60,23 @@ def write_df_to_s3(bucket, key, df, s3_client):
     """
 
     try:
-            
+
         # Format to avoid delimeter issues
         df = format_df_for_s3(df)
 
     except Exception as e:
         logger.error(f'Error formatting dataframe for writing to s3: {str(e)}')
         # Raise exception to stop execution
-        raise ValueError(f'Error formatting dataframe for writing to s3! {str(e)}')
-        
+        raise ValueError(
+            f'Error formatting dataframe for writing to s3! {str(e)}')
+
     logger.info(df.dtypes)
     logger.info(f'Writing df to csv {key}')
 
     # Use s3 client to write dataframe to S3 as csv
     try:
         csv_buffer = StringIO()
-        df.to_csv(csv_buffer,
-                  index=False,
-                  encoding='utf-8')
+        df.to_csv(csv_buffer, index=False, encoding='utf-8')
         csv_buffer.seek(0)
 
         response = s3_client.put_object(Body=csv_buffer.getvalue(),
@@ -91,6 +94,37 @@ def write_df_to_s3(bucket, key, df, s3_client):
         logger.error(f'Partial Credentials Error: {e}')
     except ParamValidationError as e:
         logger.error(f'Param Validation Error: {e}')
+
+
+def write_list_of_dicts_to_s3(bucket, key, list_of_dicts, s3_client):
+    """
+    Write a list of dictionaries to an S3 bucket as a single JSON file.
+
+    Args:
+        bucket (str): The name of the S3 bucket to write to.
+        key (str): The key to use for the object in the S3 bucket.
+        list_of_dicts (list): The list of dictionaries to write to the S3 bucket.
+        s3_client (boto3.client): The S3 client to use for writing to the S3 bucket.
+
+    Returns:
+        None
+    """
+    try:
+        # Convert list of dictionaries to newline-delimited JSON format
+        ndjson_data = "\n".join(
+            [json.dumps(record) for record in list_of_dicts])
+
+        # Write newline-delimited JSON data to S3 bucket
+        response = s3_client.put_object(Body=ndjson_data,
+                                        Bucket=bucket,
+                                        Key=key,
+                                        ContentType='application/json')
+
+        logger.info(f'Successfully wrote JSON to S3. Response: {response}')
+    except (BotoCoreError, ClientError, NoCredentialsError,
+            PartialCredentialsError) as e:
+        logger.error(f'Error writing JSON to S3: {e}')
+        raise ValueError(f'Error writing JSON to S3! {e}')
 
 
 def run_athena_query_no_results(bucket: str, query: str, database: str,
@@ -371,6 +405,8 @@ def list_all_shipbob_products(api_secret: str):
     # Send the GET request
     response = requests.get(url + url_params, headers=headers)
 
+    logger.info(f'Response Headers: {response.headers}')
+
     # convert to json
     response_json = json.loads(response.text)
 
@@ -399,37 +435,20 @@ def list_all_shipbob_products(api_secret: str):
             product_to_inventory_df = pd.concat(
                 [product_to_inventory_df, inventory_items])
 
-    else:
-
-        rec = response_json
-
-        # Extract inventory details for the product
-        inventory_items = pd.json_normalize(rec['fulfillable_inventory_items'])
-
-        # Rename columns
-        inventory_items.columns = [
-            'inventory_id', 'inventory_name', 'inventory_qty'
-        ]
-
-        # Carry forward relevant fields
-        inventory_items['product_id'] = rec['id']
-        inventory_items['sku'] = rec['sku']
-        inventory_items['sku_name'] = rec['name']
-        inventory_items['channel_id'] = rec['channel']['id']
-        inventory_items['channel_name'] = rec['channel']['name']
-
-        # Append results to df
-        product_to_inventory_df = pd.concat(
-            [product_to_inventory_df, inventory_items])
-
     # Extract page details
     current_page = response.headers['Page-Number']
     total_pages = response.headers['Total-Pages']
+
+    logger.info(f'Extracted page {current_page} of {total_pages}')
 
     while 'Next-Page' in response.headers and int(current_page) <= int(
             total_pages):
 
         url_params = response.headers['Next-Page']
+
+        logger.info(f'Total records: {len(product_to_inventory_df)}')
+
+        logger.info(f'paginating.. {url_params}')
 
         # Send the GET request
         response = requests.get(url + url_params, headers=headers)
@@ -461,29 +480,6 @@ def list_all_shipbob_products(api_secret: str):
                 # Append results to df
                 product_to_inventory_df = pd.concat(
                     [product_to_inventory_df, inventory_items])
-
-        else:
-
-            rec = response_json
-
-            # Extract inventory details for the product
-            inventory_items = pd.json_normalize(
-                rec['fulfillable_inventory_items'])
-
-            # Rename columns
-            inventory_items.columns = [
-                'inventory_id', 'inventory_name', 'inventory_qty'
-            ]
-
-            # Carry forward relevant fields
-            inventory_items['sku'] = rec['sku']
-            inventory_items['sku_name'] = rec['name']
-
-            # Append results to df
-            product_to_inventory_df = pd.concat(
-                [product_to_inventory_df, inventory_items])
-
-            logger.info(f'Page {current_page} of {total_pages} retrieved')
 
         # Extract page details
         current_page = response.headers['Page-Number']
@@ -579,232 +575,133 @@ def get_shipbob_orders_by_date(api_secret: str, start_date: str,
     logger.info(
         f'Listing all orders in shipbob from {start_date} to {end_date}')
 
-    url = 'https://api.shipbob.com'
-    url_params = f'/1.0/order?StartDate={start_date}&EndDate={end_date}'
+    url = f'https://api.shipbob.com/1.0/order?StartDate={start_date}&EndDate={end_date}'
 
     # Set up the request headers with the Bearer token
     headers = {"Authorization": f"Bearer {api_secret}"}
 
-    # Blank df to store results
-    shipbob_order_details_df = pd.DataFrame(columns=[
-        'created_date', 'purchase_date', 'shipbob_order_id', 'order_number',
-        'order_status', 'order_type', 'channel_id', 'channel_name',
-        'product_id', 'sku', 'shipping_method', 'customer_name',
-        'customer_email', 'customer_address_city', 'customer_address_state',
-        'customer_address_country'
-    ])
+    # Blank df to store order data
+    order_data_df = pd.DataFrame(columns = [
+                                     'created_date',
+                                     'purchase_date',
+                                     'shipbob_order_id',
+                                     'order_number',
+                                     'order_status',
+                                     'order_type',
+                                     'shipping_method',
+                                     'channel_id',
+                                     'channel_name',
+                                     'customer_name',
+                                     'customer_email',
+                                     'customer_address_city',
+                                     'customer_address_state',
+                                     'customer_address_country',
+                                     'product_id',
+                                     'sku',
+                                     'sku_name',
+                                     'inventory_id',
+                                     'inventory_qty',
+                                     'inventory_name'
+                                 ])
 
-    # Send the GET request
-    response = requests.get(url + url_params, headers=headers)
 
-    # convert to json
-    response_json = json.loads(response.text)
+    count = 0
+    while url:   # while there are more pages of results
 
-    # Parse response json to a df (one record per line item in an order)
-    if type(response_json) == list:
+        print(f"Fetching: {url}")
+        response = requests.get(url, headers=headers)
 
-        for rec in response_json:
+        # Convert to json
+        data_json = response.json()
 
-            # Extract product / line item details for the order
-            line_items = pd.json_normalize(rec['products'])
+        # ---------- ITERATE & NORMALIZE -----------
 
-            if len(line_items) > 0:
+        try:
+    
+            # Loop through records & flatten
+            for rec in data_json:
+    
+                # Root level fields
+                created_date = pd.to_datetime(rec['created_date'])
+                purchase_date = pd.to_datetime(rec['purchase_date'])
+                shipbob_order_id = rec['id']
+                order_number = rec['order_number']
+                order_status = rec['status']
+                order_type = rec['type']
+                shipping_method = rec['shipping_method']
+    
+                # Parse nested fields
+                channel_id = rec.get('channel') and rec.get('channel', {}).get('id')
+                channel_name = rec.get('channel') and rec.get('channel', {}).get('name')
+                customer_name = rec['recipient']['name']
+                customer_email = rec['recipient']['email']
+                customer_address_city = rec['recipient']['address']['city']
+                customer_address_state = rec['recipient']['address']['state']
+                customer_address_country = rec['recipient']['address']['country']
+    
+                # Flatten inventory_items from within shipments
+                for shipment in rec['shipments']:
+    
+                    for product in shipment['products']:
+                        product_id = product['id']
+                        sku = product['sku']
+                        sku_name = product['name']
+    
+                        for inventory_item in product['inventory_items']:
+                            inventory_id = inventory_item['id']
+                            inventory_qty = inventory_item['quantity']
+                            inventory_name = inventory_item['name']
+    
+    
+                            # Compile all variables into a single dataframe record
+                            df_rec = pd.DataFrame({
+                                'created_date': [created_date],
+                                'purchase_date': [purchase_date],
+                                'shipbob_order_id': [shipbob_order_id],
+                                'order_number': [order_number],
+                                'order_status': [order_status],
+                                'order_type': [order_type],
+                                'shipping_method': [shipping_method],
+                                'channel_id': [channel_id],
+                                'channel_name': [channel_name],
+                                'customer_name': [customer_name],
+                                'customer_email': [customer_email],
+                                'customer_address_city': [customer_address_city],
+                                'customer_address_state': [customer_address_state],
+                                'customer_address_country': [customer_address_country],
+                                'product_id': [product_id],
+                                'sku': [sku],
+                                'sku_name': [sku_name],
+                                'inventory_id': [inventory_id],
+                                'inventory_qty': [inventory_qty],
+                                'inventory_name': [inventory_name],
+                            })
+    
+                            # Concat data
+                            order_data_df = pd.concat([order_data_df, df_rec])
 
-                # Subset columns to retain
-                line_items = line_items[['id', 'sku']].copy()
+        except TypeError as te:
+            logger.error(f'TypeError: {te}')
+            logger.error(rec)
+            break
+            
 
-                # Rename columns
-                line_items.columns = ['product_id', 'sku']
 
-                # Carry forward relevant fields
-                line_items['shipbob_order_id'] = rec['id']
-                line_items['created_date'] = pd.to_datetime(
-                    rec['created_date'])
-                line_items['purchase_date'] = pd.to_datetime(
-                    rec['purchase_date'])
-                line_items['order_number'] = rec['order_number']
-                line_items['order_status'] = rec['status']
-                line_items['order_type'] = rec['type']
-                line_items['shipping_method'] = rec['shipping_method']
+        # ---------- PAGINATE -----------
 
-                # Channel details
-                line_items['channel_id'] = rec['channel']['id']
-                line_items['channel_name'] = rec['channel']['name']
+        count += len(response.json())
+        url = response.headers.get('Next-Page', None)
+        if url:
+            url = "https://api.shipbob.com" + url
 
-                # Recipient details
-                line_items['customer_name'] = rec['recipient']['name']
-                line_items['customer_email'] = rec['recipient']['email']
-                line_items['customer_address_city'] = rec['recipient'][
-                    'address']['city']
-                line_items['customer_address_state'] = rec['recipient'][
-                    'address']['state']
-                line_items['customer_address_country'] = rec['recipient'][
-                    'address']['country']
+    logger.info(f"Total Order Count: {count}")
 
-                # If records exist, append them
-                if len(line_items) > 0:
-                    # Append results to df
-                    shipbob_order_details_df = pd.concat(
-                        [shipbob_order_details_df, line_items])
+    # Verify that total count of orders was extracted to dataframe
+    assert count == len(order_data_df['shipbob_order_id'].unique())
 
-    else:
+    logger.info(order_data_df.head())
 
-        rec = response_json
-
-        # Extract product / line item details for the order
-        line_items = pd.json_normalize(rec['products'])
-
-        if len(line_items) > 0:
-
-            # Subset columns to retain
-            line_items = line_items[['id', 'sku']].copy()
-
-            # Rename columns
-            line_items.columns = ['product_id', 'sku']
-
-            # Carry forward relevant fields
-            line_items['shipbob_order_id'] = rec['id']
-            line_items['created_date'] = pd.to_datetime(rec['created_date'])
-            line_items['purchase_date'] = pd.to_datetime(rec['purchase_date'])
-            line_items['order_number'] = rec['order_number']
-            line_items['order_status'] = rec['status']
-            line_items['order_type'] = rec['type']
-            line_items['shipping_method'] = rec['shipping_method']
-
-            # Channel details
-            line_items['channel_id'] = rec['channel']['id']
-            line_items['channel_name'] = rec['channel']['name']
-
-            # Recipient details
-            line_items['customer_name'] = rec['recipient']['name']
-            line_items['customer_email'] = rec['recipient']['email']
-            line_items['customer_address_city'] = rec['recipient']['address'][
-                'city']
-            line_items['customer_address_state'] = rec['recipient']['address'][
-                'state']
-            line_items['customer_address_country'] = rec['recipient'][
-                'address']['country']
-
-            # Append results to df
-            shipbob_order_details_df = pd.concat(
-                [shipbob_order_details_df, line_items])
-
-    # Extract page details
-    current_page = response.headers['Page-Number']
-    total_pages = response.headers['Total-Pages']
-
-    while 'Next-Page' in response.headers and int(current_page) <= int(
-            total_pages):
-
-        url_params = response.headers['Next-Page']
-
-        # Send the GET request
-        response = requests.get(url + url_params, headers=headers)
-
-        # convert to json
-        response_json = json.loads(response.text)
-
-        # Parse response json to a df (one record per line item in an order)
-        if type(response_json) == list:
-
-            for rec in response_json:
-
-                # Extract product / line item details for the order
-                line_items = pd.json_normalize(rec['products'])
-
-                if len(line_items) > 0:
-
-                    # Subset columns to retain
-                    line_items = line_items[['id', 'sku']].copy()
-
-                    # Rename columns
-                    line_items.columns = ['product_id', 'sku']
-
-                    # Carry forward relevant fields
-                    line_items['shipbob_order_id'] = rec['id']
-                    line_items['created_date'] = pd.to_datetime(
-                        rec['created_date'])
-                    line_items['purchase_date'] = pd.to_datetime(
-                        rec['purchase_date'])
-                    line_items['order_number'] = rec['order_number']
-                    line_items['order_status'] = rec['status']
-                    line_items['order_type'] = rec['type']
-                    line_items['shipping_method'] = rec['shipping_method']
-
-                    # Channel details
-                    line_items['channel_id'] = rec['channel']['id']
-                    line_items['channel_name'] = rec['channel']['name']
-
-                    # Recipient details
-                    line_items['customer_name'] = rec['recipient']['name']
-                    line_items['customer_email'] = rec['recipient']['email']
-                    line_items['customer_address_city'] = rec['recipient'][
-                        'address']['city']
-                    line_items['customer_address_state'] = rec['recipient'][
-                        'address']['state']
-                    line_items['customer_address_country'] = rec['recipient'][
-                        'address']['country']
-
-                    # Append results to df
-                    shipbob_order_details_df = pd.concat(
-                        [shipbob_order_details_df, line_items])
-
-        else:
-
-            rec = response_json
-
-            # Extract product / line item details for the order
-            line_items = pd.json_normalize(rec['products'])
-
-            if len(line_items) > 0:
-
-                # Subset columns to retain
-                line_items = line_items[['id', 'sku']].copy()
-
-                # Rename columns
-                line_items.columns = ['product_id', 'sku']
-
-                # Carry forward relevant fields
-                line_items['shipbob_order_id'] = rec['id']
-                line_items['created_date'] = pd.to_datetime(
-                    rec['created_date'])
-                line_items['purchase_date'] = pd.to_datetime(
-                    rec['purchase_date'])
-                line_items['order_number'] = rec['order_number']
-                line_items['order_status'] = rec['status']
-                line_items['order_type'] = rec['type']
-                line_items['shipping_method'] = rec['shipping_method']
-
-                # Channel details
-                line_items['channel_id'] = rec['channel']['id']
-                line_items['channel_name'] = rec['channel']['name']
-
-                # Recipient details
-                line_items['customer_name'] = rec['recipient']['name']
-                line_items['customer_email'] = rec['recipient']['email']
-                line_items['customer_address_city'] = rec['recipient'][
-                    'address']['city']
-                line_items['customer_address_state'] = rec['recipient'][
-                    'address']['state']
-                line_items['customer_address_country'] = rec['recipient'][
-                    'address']['country']
-
-                # Append results to df
-                shipbob_order_details_df = pd.concat(
-                    [shipbob_order_details_df, line_items])
-
-        # Extract page details
-        current_page = response.headers['Page-Number']
-
-        logger.info(f'Page {current_page} of {total_pages} retrieved')
-        logger.info(
-            f"Min Date: {shipbob_order_details_df['created_date'].min()}  / Max Date: {shipbob_order_details_df['created_date'].max()}"
-        )
-        logger.info(
-            f"Total distinct records: {shipbob_order_details_df['order_number'].nunique()}"
-        )
-
-    return shipbob_order_details_df.reset_index(drop=True)
+    return order_data_df.reset_index(drop=True)
 
 
 def pydantic_to_glue_schema(model: Type[BaseModel]) -> List[Dict[str, str]]:
@@ -985,17 +882,19 @@ def list_active_shopify_variant_skus(shopify_api_key: str, shopify_api_pw: str,
 
     return active_shopify_variant_sku_dict
 
+
 def clean_column_name(col_name):
     """Function to format column names for Glue tables"""
-    
+
     # Remove special characters, replace spaces and multiple non-alphanumeric characters with a single underscore
     col_name = re.sub(r'[^\w]+', '_', col_name)
     # Convert to lowercase
     col_name = col_name.lower()
     # Strip any leading/trailing underscores that may be left after the substitution
     col_name = col_name.strip('_')
-    
+
     return col_name
+
 
 # Function (with docstring args) to create an SNS client and publish a message to a topic
 def send_sns_alert(message, topic_arn, subject, region):
@@ -1026,4 +925,3 @@ def send_sns_alert(message, topic_arn, subject, region):
     except ClientError as e:
         logger.error(f'Error sending SNS alert: {str(e)}')
         raise ValueError(f'Error sending SNS alert! {str(e)}')
-

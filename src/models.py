@@ -43,6 +43,18 @@ class ShipbobOrderDetails(BaseModel):
     raise ValueError(
         f"{cls} must be a datetime object or a string in ISO 8601 format")
 
+    @field_validator('*', pre=True)
+    @classmethod
+    def replace_delimiter(cls, value):
+        # Delimeter to check for
+        delimiter = ','
+        replacement = ' '  # Replace delimeter another safe character
+    
+        # Apply replacement only for string fields
+        if isinstance(value, str) and delimiter in value:
+            return value.replace(delimiter, replacement)
+        return value
+
 
 class ShipbobInventory(BaseModel):
   id: int

@@ -38,7 +38,6 @@ def main():
         help=
         'End date to use to extract records.  Records will be extracted from the shipbob_order_details table                                 from 00:00:00 (UTC) on the start_date through 23:59:59 (UTC) on the end_date'
     )
-
     # Parse input args
     args = parser.parse_args()
     logger.info(f'Args: {args}')
@@ -83,10 +82,6 @@ def main():
     if not s3_bucket:
         raise ValueError("AWS_ACCESS_SECRET environment variable is not set")
 
-    # ------ GET PRODUCTS ------
-
-    # List all products in shipbob
-    product_to_inventory_df = list_all_shipbob_products(shipbob_api_secret)
 
     # ------ GET ORDERS ------
 
@@ -99,45 +94,34 @@ def main():
     logger.info(
         f"Total order count: {shipbob_orders_df['order_number'].nunique()}")
 
-    # Merge order details with product details
-    shipbob_order_details_df = shipbob_orders_df.merge(
-        product_to_inventory_df[[
-            'product_id', 'sku_name', 'inventory_id', 'inventory_name',
-            'inventory_qty'
-        ]],
-        how='left',
-        on='product_id')
-
-    if len(shipbob_order_details_df) == 0:
+    if len(shipbob_orders_df) == 0:
         logger.info(f'0 Records returned from ShipBob API')
 
     else:
 
         logger.info(
-            shipbob_order_details_df.groupby('purchase_date')
+            shipbob_orders_df.groupby('purchase_date')
             ['purchase_date'].count())
 
         # Instantiate s3 client
         s3_client = boto3.client('s3',
                                  region_name=region,
-                                 aws_access_key_id=AWS_ACCESS_KEY_ID,
-                                 aws_secret_access_key=AWS_SECRET_ACCESS_KEY)
+        aws_access_key_id=AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=AWS_SECRET_ACCESS_KEY)
 
         while pd.to_datetime(start_date) <= pd.to_datetime(end_date):
             logger.info(f'start_date {start_date} - end_date {end_date}')
 
-            # Subset shipbob_order_details_df the current start_date
-            df = shipbob_order_details_df[pd.to_datetime(
-                shipbob_order_details_df['purchase_date']).dt.strftime(
+            # Subset shipbob_orders_df to the current start_date (to avoid overlap)
+            df = shipbob_orders_df[pd.to_datetime(
+                shipbob_orders_df['purchase_date']).dt.strftime(
                     '%Y-%m-%d') == pd.to_datetime(start_date).strftime(
                         '%Y-%m-%d')]
 
             logger.info(f'Number of records for {start_date}: {len(df)}')
-            logger.info(df.head())
 
-            # df.to_csv(f'shipbob_order_details_df_{start_date}.csv',
-            #           index=False)
 
+           
             # Validate data w/ Pydantic
             valid_data, invalid_data = validate_dataframe(
                 df, ShipbobOrderDetails)
@@ -166,6 +150,15 @@ def main():
                                    key=s3_prefix,
                                    df=pd.DataFrame(valid_data),
                                    s3_client=s3_client)
+
+                    
+                    # with open('test.json', 'w', encoding='utf-8') as json_file:
+                    #     json.dump(valid_data, json_file, indent=2, ensure_ascii=False)
+                        
+                    #     write_list_of_dicts_to_s3(bucket=s3_bucket,
+                    #    key=s3_prefix,
+                    #    list_of_dicts=valid_data,
+                    #    s3_client=s3_client)
 
                 except Exception as e:
                     logger.error(f'Error writing to s3: {str(e)}')
