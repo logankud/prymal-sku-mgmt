@@ -3,6 +3,7 @@ import pandas as pd
 from loguru import logger
 import os
 import sys
+import yaml
 
 sys.path.append('src/')  # updating path back to root for importing modules
 
@@ -22,7 +23,14 @@ def main():
     s3_bucket = os.getenv('S3_BUCKET_NAME')
     alert_topic_arn = os.getenv('ALERT_TOPIC_ARN')
 
-    logger.info(f'Alert Topic ARN {alert_topic_arn}')
+    # read in config yaml & parse variable values
+    with open('./alerts/config.yml', 'r') as file:
+        config = yaml.safe_load(file)
+
+    restock_point_in_days_finished_goods = config[
+        'restock_point_in_days_finished_goods']  # no. of days to replenish for
+    alert_point_in_days_finished_goods = config[
+        'alert_point_in_days_finished_goods']  # no. of days of inventory remaining before alerting
 
     # ====================== QUERY DATA - Katana Raw Material Status =============================================
 
@@ -77,9 +85,16 @@ def main():
     
     The following products needs replenished to fulfill upcoming open MO's as of {raw_materials_needing_replinished['planned_qty_as_of'].max()} \n\n
     
-    {products_to_replenish} 
     
     """
+
+    # Iterate through records where
+    for _, row in raw_materials_needing_replinished.iterrows():
+        alert_message += f"• {row['name']}:\n"
+        alert_message += f"  - Current stock: {row['in_stock']} {row['units_of_measure']}\n"
+        alert_message += f"  - Minimum Quantity Required to Meet Upcoming MO's as of {pd.to_datetime(row['in_stock_as_of']).strftime('%Y-%m-%d')}: {-int(round(float(row['inventory_remaining']),0))} {row['units_of_measure']}\n\n"
+
+    logger.info(alert_message)
 
     logger.info(alert_message)
 
@@ -99,12 +114,12 @@ def main():
     # ------
 
     # Athena Query to pull latest partition of Katana inventory data
-    query = """
+    query = f"""
     
     SELECT *  
     FROM "prymal"."shipbob_inventory_run_rate"
     WHERE partition_date = (SELECT MAX(partition_date) FROM "prymal"."shipbob_inventory_run_rate")   -- latest partition
-    AND est_stock_days_on_hand < 80   -- only include products with < X days of stock on hand
+    AND est_stock_days_on_hand < {alert_point_in_days_finished_goods}   -- only include products with < X days of stock on hand
     
     """
 
@@ -134,11 +149,12 @@ def main():
 
     # # ------------------- CHECK FOR FINISHED GOODS NEEDING REPLENISHED -------------------
 
-    # Calcualte restock_amount (to replenish 60 days of inventory based on run rate & stock on hand)
+    # Calcualte restock_amount (to replenish XX days of inventory based on run rate & stock on hand)
     shipbob_inventory_run_rate_df['restock_amount'] = (
         shipbob_inventory_run_rate_df['run_rate'] *
         shipbob_inventory_run_rate_df['est_stock_days_on_hand'].apply(
-            lambda x: int(90 - x))).astype(int)
+            lambda x: int(restock_point_in_days_finished_goods - x))
+    ).astype(int)
 
     # Filter to only include finished goods that need replenished
     products_needing_restocked = shipbob_inventory_run_rate_df.loc[
@@ -158,7 +174,7 @@ def main():
             alert_message += f"• {row['name']}:\n"
             alert_message += f"  - Current stock: {row['total_fulfillable_quantity']}\n"
             alert_message += f"  - Estimated stockout date: {row['estimated_stockout_date']}\n"
-            alert_message += f"  - Quantity to restock: {int(row['run_rate'] * (60 - row['est_stock_days_on_hand']))}\n\n"
+            alert_message += f"  - Quantity to restock: {int(row['run_rate'] * (restock_point_in_days_finished_goods - row['est_stock_days_on_hand']))}\n\n"
 
         logger.info(alert_message)
 
