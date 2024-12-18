@@ -15,6 +15,9 @@ def main():
 
     logger.info('Running main()')
 
+    logger.info(os.getcwd())
+    logger.info(os.listdir())
+
     # ------------------- CONFIGURE ENV VARIABLES -------------------
 
     # Configure Athena / Glue
