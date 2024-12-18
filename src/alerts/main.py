@@ -27,7 +27,7 @@ def main():
     alert_topic_arn = os.getenv('ALERT_TOPIC_ARN')
 
     # read in config yaml & parse variable values
-    with open('./alerts/config.yml', 'r') as file:
+    with open('src/alerts/config.yml', 'r') as file:
         config = yaml.safe_load(file)
 
     restock_point_in_days_finished_goods = config[
