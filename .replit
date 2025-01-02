@@ -1,3 +1,4 @@
+
 run = "bash -c 'python src/dashboard/dashboard.py & streamlit run src/dashboard/file_upload_streamlit.py --server.port=8501 & wait'"
 
 modules = ["python-3.10:v25-20230920-d4ad2e4"]
@@ -6,18 +7,20 @@ modules = ["python-3.10:v25-20230920-d4ad2e4"]
 channel = "stable-23_11"
 
 [deployment]
-run = "bash -c 'streamlit run  src/dashboard/file_upload_streamlit.py --server.enableCORS=false & python src/dashboard/dashboard.py & wait'"
+run = "bash -c 'streamlit run src/dashboard/file_upload_streamlit.py --server.enableCORS=false --server.address=0.0.0.0 & python src/dashboard/dashboard.py & wait'"
 deploymentTarget = "cloudrun"
 
 [[ports]]
 localPort = 8050
 externalPort = 8050
 description = "Dash app port"
+exposeLocalhost = true
 
 [[ports]]
 localPort = 8501
 externalPort = 8501
 description = "Streamlit default port"
+exposeLocalhost = true
 
 [auth]
 pageEnabled = false
