@@ -1,4 +1,5 @@
 annotated-types==0.7.0
+bcrypt
 boto3==1.34.136
 botocore==1.34.136
 certifi==2024.6.2

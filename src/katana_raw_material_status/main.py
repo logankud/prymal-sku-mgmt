@@ -67,8 +67,7 @@ def main():
     open_mo_df = run_athena_query(query, database, region, s3_bucket)
 
     # Update data types
-    open_mo_df['planned_quantity_of_ingredient'] = open_mo_df[
-        'planned_quantity_of_ingredient'].fillna(0.0).astype(float)
+    open_mo_df['planned_quantity_of_ingredient'] = open_mo_df['planned_quantity_of_ingredient'].fillna(0.0).astype(float)
 
     # # ------------------- CALCULATE TOTAL UPCOMING CONSUMPTION OF RAW MATERIALS -------------------
 
@@ -93,6 +92,7 @@ def main():
 
     # Exclude raw materials not forecasted for consumption (ie. planned qty = 0))
     katana_inventory_df['planned_qty'].fillna(0.0, inplace=True)
+
     katana_inventory_df = katana_inventory_df.loc[katana_inventory_df['planned_qty']>0].copy()
     
 

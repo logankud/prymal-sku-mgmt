@@ -14,11 +14,3 @@ CREATE EXTERNAL TABLE IF NOT EXISTS shipbob_inventory_details (
     total_backordered_quantity int,
     is_active boolean
 )
-PARTITIONED BY (
-    partition_date date
-)
-ROW FORMAT DELIMITED
-FIELDS TERMINATED BY ','
-STORED AS TEXTFILE
-LOCATION 's3://S3_BUCKET_NAME/shipbob/inventory_details/'
-TBLPROPERTIES ('skip.header.line.count'='1');

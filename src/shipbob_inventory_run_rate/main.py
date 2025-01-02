@@ -141,7 +141,7 @@ def main():
         SELECT * 
         FROM shipbob_inventory_details 
         WHERE partition_date = DATE('{pd.to_datetime(pd.to_datetime(f"{start_date}") - timedelta(1)).strftime('%Y-%m-%d')}')
-        
+
         """
 
         shipbob_inventory_details_df = run_athena_query(

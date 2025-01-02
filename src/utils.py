@@ -5,14 +5,16 @@ from loguru import logger
 import os
 from io import StringIO
 import requests
-import json
 import pandas as pd
 import numpy as np
 import csv
 import datetime
 from datetime import timedelta
+import pytz
+from pytz import timezone
 from typing import Any, List, Tuple, Type, Dict, get_origin, get_args
 import re
+import time
 
 from pydantic import BaseModel, ValidationError
 
@@ -367,6 +369,7 @@ def validate_dataframe(
 
     for item in data:
         try:
+            logger.info('test')
             # Attempt to create a model instance
             valid_item = model(**item)
             valid_items.append(valid_item.model_dump())
@@ -925,3 +928,247 @@ def send_sns_alert(message, topic_arn, subject, region):
     except ClientError as e:
         logger.error(f'Error sending SNS alert: {str(e)}')
         raise ValueError(f'Error sending SNS alert! {str(e)}')
+
+
+def get_shopify_orders_by_date(shopify_api_key: str, shopify_api_pw: str,start_date: str, end_date:str):
+    """
+    Get all orders & line item details from a Shopify store as of a specific date.
+
+    Args:
+        shopify_api_key (str): Shopify API key
+        shopify_api_pw (str): Shopify API password
+        start_date (str): Start date of orders to retrieve
+        end_date (str): End date of orders to retrieve
+
+    Returns:
+        pd.DataFrame: dataframe of one record per order for orders in the date range
+        pd.DataFrame: dataframe of one record per line item for all orders
+
+    """
+
+    # from datetime import datetime, timedelta
+
+
+    # Set dates to pull data for
+    sdate = pd.to_datetime(start_date)
+    edate = pd.to_datetime(end_date)
+
+    # Format API and pull all data from desired date range:
+
+    # Set timezone - Pacific for shopify data
+    pacific = timezone('US/Pacific')
+
+    # extract year, month and date from user input
+    y_start = edate.strftime('%Y')
+    m_start = edate.strftime('%m')
+    d_start = edate.strftime('%d')
+
+    # Set the start_date (which is the most current date of data we want)
+    start_date = pacific.localize(
+      datetime.datetime(int(y_start), int(m_start), int(d_start), 23, 59,
+                        59))  # datetime.date(%Y,%m,%d,%H,%M,%S)
+
+    # extract year, month and date from user input
+    y_end = sdate.strftime('%Y')
+    m_end = sdate.strftime('%m')
+    d_end = sdate.strftime('%d')
+
+    # Set the end_date (which is the oldest date of data we want, where the loop will terminate)
+    end_date = pacific.localize(
+      datetime.datetime(int(y_end), int(m_end), int(d_end), 0, 0,
+                        0))  # datetime.date(%Y,%m,%d,%H,%M,%S)
+
+    logger.info(f'backfill start date: {start_date}')
+    logger.info(f'backfill end date: {end_date}')
+    logger.info('shopify api data being pulled from: ', sdate, ' through ', edate)
+
+    # Create temp lists to hold the values in the json file
+    line_items = []
+    prices = []
+    order_id = []
+    created_at = []
+    email = []
+    subtotal_price = []
+    total_tax = []
+    total_discounts = []
+    financial_status = []
+    line_item_qty = []
+    shipping_fees = []
+
+    # Set paramaters for GET request
+    payload = {
+      'limit': 250,
+      'created_at_max': start_date,
+      'created_at_min': end_date,
+      'financial_status': 'paid'
+    }
+
+    # Blank df to store line item details
+    shopify_line_item_df = pd.DataFrame()
+    shopify_orders_df = pd.DataFrame()
+
+    # Shopify API URL and endpoint
+    url = f'https://{shopify_api_key}:{shopify_api_pw}@prymal-coffee-creamer.myshopify.com/admin/api/2021-07/orders.json?status=any'
+
+    has_next_page = True
+    successful_response = False
+    max_retries = 3
+
+    while has_next_page == True:
+
+        time.sleep(1)
+
+        for retry in range(max_retries):
+
+            try:
+
+                logger.info(f'URL: {url}')
+
+                r = requests.get(url, stream=True, params=payload)
+
+                logger.info(f'Response: {r.status_code}')
+                r.raise_for_status()  # Check for any HTTP errors
+
+                if r.status_code == 200:
+                    response_json = r.json()
+                    successful_response = True
+                    
+
+            except requests.exceptions.HTTPError as errh:
+              logger.info("HTTP Error:" + str(errh))
+              time.sleep(30)
+              continue
+
+
+            except requests.exceptions.ConnectionError as errc:
+              logger.info("Error Connecting:" + str(errc))
+              time.sleep(30)
+              continue 
+
+            except requests.exceptions.Timeout as errt:
+              logger.info("Timeout Error:" + str(errt))
+              time.sleep(30)
+              continue
+
+            except requests.exceptions.RequestException as err:
+              logger.info("Error:" + str(err))
+              time.sleep(30)
+              continue
+
+            if retry < max_retries - 1:
+               logger.info('Retrying api call...')
+            else:
+               logger.info(f'Retried {max_retries} times without getting a 200 response.')
+
+
+            logger.info(f'Successful response: {successful_response}')
+
+
+            if successful_response == True:
+
+
+          # --------------------------- ORDER DF ----------------------------
+
+                  # Normalize Shopify Orders
+                orders = pd.json_normalize(response_json['orders'])
+
+                # if there are orders, process them 
+                if len(orders) == 0:
+                    logger.info(f'{len(orders)} orders')
+                    return shopify_orders_df, shopify_line_item_df
+                    
+                elif len(orders) > 0:
+
+                    logger.info(f'{len(orders)} orders')
+
+
+                    # Select relevant columns
+                    orders_df = orders[[
+                    'order_number', 'email', 'created_at', 'shipping_address.address1',
+                    'shipping_address.city', 'shipping_address.province',
+                    'shipping_address.country', 'subtotal_price', 'total_line_items_price',
+                    'total_tax', 'total_discounts',
+                    'total_shipping_price_set.shop_money.amount', 'total_price'
+                    ]].copy()
+                    # Rename columns
+                    orders_df.columns = [
+                    'order_id', 'email', 'created_at', 'shipping_address', 'shipping_city',
+                    'shipping_province', 'shipping_country', 'subtotal_price',
+                    'total_line_items_price', 'total_tax', 'total_discounts',
+                    'total_shipping_fee', 'total_price'
+                    ]
+
+                    logger.info(f"Min order date: {orders_df['created_at'].min()}")
+
+                    # Use created_at to create a formatted date column (yyyy-mm-dd)
+                    orders_df['order_date'] = pd.to_datetime(orders_df['created_at'].str.slice(0, 19),format='%Y-%m-%dT%H:%M:%S').dt.strftime('%Y-%m-%d')
+
+                    shopify_orders_df = pd.concat([shopify_orders_df, orders_df])
+
+                      # --------------------------- LINE ITEM DF ----------------------------
+
+                      # Iterate through orders_df and normalize line_items_df
+                    for i in range(len(response_json['orders'])):
+
+                        line_items = pd.json_normalize(response_json['orders'][i]['line_items'])
+
+                        line_items = line_items[[
+                          'name', 'price', 'quantity', 'sku', 'title', 'variant_title'
+                        ]].copy()
+
+                        line_items['order_id'] = orders.iloc[i]['order_number']
+                        line_items['email'] = orders.iloc[i]['email']
+                        line_items['created_at'] = orders.iloc[i]['created_at']
+
+                        line_items['order_date'] = pd.to_datetime(
+                          line_items['created_at'].str.slice(0, 19),format='%Y-%m-%dT%H:%M:%S').dt.strftime('%Y-%m-%d')
+
+                        line_items.columns = [
+                          'line_item_name', 'price', 'quantity', 'sku', 'title', 'variant_title',
+                          'order_id', 'email', 'created_at', 'order_date'
+                        ]
+                        line_items = line_items[[
+                          'order_id', 'email', 'created_at', 'order_date', 'price', 'quantity',
+                          'sku', 'title', 'variant_title', 'line_item_name'
+                        ]].copy()
+
+                        line_items.reset_index(inplace=True, drop=True)
+
+                        shopify_line_item_df = pd.concat([shopify_line_item_df, line_items])
+
+
+                        # ----------- Paginate ---------------
+
+                      # Paginate results if there are more than 250 orders
+                        if 'link' in r.headers and 'rel="next"' in r.headers['link']:
+
+                            if len(r.headers['link'].split(',')) > 1:
+                                next_link = r.headers['link'].split(',')[1].split('>')[0].replace(
+                                '<', '')
+                                url = f'{next_link.split("//")[0]}' + f'//{shopify_api_key}:' + f'{shopify_api_pw}' + '@' + f'{next_link.split("//")[1]}'
+
+                            else:
+                                next_link = r.headers['link'].split('>')[0].replace('<', '')
+                                url = f'{next_link.split("//")[0]}' + f'//{shopify_api_key}:' + f'{shopify_api_pw}' + '@' + f'{next_link.split("//")[1]}'
+
+                        else:
+                            has_next_page = False
+
+                        #Reset Payload
+                        payload = {'limit': 250}
+
+                        logger.info(orders_df['order_date'].min(), orders_df['order_date'].max())
+                        logger.info(f'Has next page: {has_next_page}')
+                        logger.info(f'Total orders: {len(shopify_orders_df)}')
+                        logger.info(
+                        f'Orders date range: {shopify_orders_df["order_date"].min()} to {shopify_orders_df["order_date"].max()}'
+                        )
+                        logger.info(f'Total line items: {len(shopify_line_item_df)}')
+                        logger.info(
+                        f'Line items date range: {shopify_line_item_df["order_date"].min()} to {shopify_line_item_df["order_date"].max()}'
+                        )
+
+                    shopify_line_item_df.reset_index(inplace=True, drop=True)
+                    shopify_orders_df.reset_index(inplace=True, drop=True)
+                
+                    return shopify_orders_df, shopify_line_item_df

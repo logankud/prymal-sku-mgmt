@@ -1,4 +1,4 @@
-CREATE EXTERNAL TABLE IF NOT EXISTS shipbob_order_details (
+CREATE EXTERNAL TABLE IF NOT EXISTS shipbob_order_details_json (
   
   created_date TIMESTAMP,
   purchase_date TIMESTAMP,
@@ -22,8 +22,10 @@ CREATE EXTERNAL TABLE IF NOT EXISTS shipbob_order_details (
   inventory_qty BIGINT
 )
 PARTITIONED BY (order_date DATE)
-ROW FORMAT DELIMITED
-FIELDS TERMINATED BY ','
-STORED AS TEXTFILE
-LOCATION 's3://S3_BUCKET_NAME/shipbob/order_details/'
-TBLPROPERTIES ('skip.header.line.count'='1');
+-- ROW FORMAT DELIMITED
+-- FIELDS TERMINATED BY ','
+-- STORED AS TEXTFILE
+ROW FORMAT SERDE 'org.openx.data.jsonserde.JsonSerDe'
+
+LOCATION 's3://S3_BUCKET_NAME/shipbob/order_details_json/'
+-- TBLPROPERTIES ('skip.header.line.count'='1');

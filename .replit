@@ -1,4 +1,7 @@
-run =  "src/run.sh"
+# run =  "python src/dashboard/dashboard.py"
+
+
+run = "bash -c 'python src/dashboard/dashboard.py & streamlit run  src/dashboard/file_upload_streamlit.py --server.enableCORS=false  & wait '"
 
 modules = ["python-3.10:v25-20230920-d4ad2e4"]
 
@@ -6,9 +9,26 @@ modules = ["python-3.10:v25-20230920-d4ad2e4"]
 channel = "stable-23_11"
 
 [deployment]
-run = ["sh", "-c", "src/run.sh"]
-deploymentTarget = "scheduled"
+run = "bash -c 'streamlit run  src/dashboard/file_upload_streamlit.py --server.enableCORS=false & python src/dashboard/dashboard.py & wait'"
+deploymentTarget = "cloudrun"
 
 [[ports]]
-localPort = 8888
+localPort = 3000
+externalPort = 3000
+
+[[ports]]
+localPort = 8050
+externalPort = 8050
+
+[[ports]]
+localPort = 8501
+externalPort = 3001
+
+[[ports]]
+localPort = 8502
 externalPort = 80
+
+[auth]
+pageEnabled = false
+buttonEnabled = false
+authButton = false
