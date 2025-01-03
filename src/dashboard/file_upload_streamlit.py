@@ -36,6 +36,9 @@ if __name__ == '__main__':
     import streamlit.config as config
     config.set_option('server.port', port)
     config.set_option('server.address', '0.0.0.0')
+    config.set_option('browser.serverAddress', '0.0.0.0')
+    config.set_option('server.enableCORS', False)
+    config.set_option('server.enableXsrfProtection', False)
 
 
 
