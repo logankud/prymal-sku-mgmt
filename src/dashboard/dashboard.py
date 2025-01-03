@@ -997,4 +997,5 @@ def update_product_dropdown(selected_product):
     return dash.no_update
 
 if __name__ == '__main__':
-    app.run_server(debug=True, host='0.0.0.0', port=8050, use_reloader=False)
+    app.run_server(host='0.0.0.0', port=8050, debug=True)
+

@@ -1,5 +1,5 @@
 
-run = "bash -c 'python src/dashboard/dashboard.py --host=0.0.0.0 --port=8050 & streamlit run src/dashboard/file_upload_streamlit.py --server.port=8501 --server.address=0.0.0.0 & wait'"
+run = "bash -c 'python src/dashboard/dashboard.py & streamlit run src/dashboard/file_upload_streamlit.py --server.port=8501 --server.address=0.0.0.0 & wait'"
 
 modules = ["python-3.10:v25-20230920-d4ad2e4"]
 
