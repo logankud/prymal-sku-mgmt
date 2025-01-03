@@ -25,4 +25,3 @@ description = "Streamlit app"
 [auth]
 pageEnabled = false
 buttonEnabled = false
-authButton = false

@@ -997,6 +997,4 @@ def update_product_dropdown(selected_product):
     return dash.no_update
 
 if __name__ == '__main__':
-    import sys
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8050
-    app.run_server(debug=True, host='0.0.0.0', port=port, use_reloader=False)
+    app.run_server(debug=True, host='0.0.0.0', port=8050, use_reloader=False)

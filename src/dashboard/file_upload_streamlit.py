@@ -29,12 +29,9 @@ CURRENT_DATE_M = pd.to_datetime('today').strftime('%m')
 CURRENT_DATE_D = pd.to_datetime('today').strftime('%d')
 
 if __name__ == '__main__':
-    import sys
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8501
-    
     # Configure Streamlit port
     import streamlit.config as config
-    config.set_option('server.port', port)
+    config.set_option('server.port', 8501)
     config.set_option('server.address', '0.0.0.0')
     config.set_option('browser.serverAddress', '0.0.0.0')
     config.set_option('server.enableCORS', False)
