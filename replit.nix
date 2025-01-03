@@ -1,5 +1,6 @@
 {pkgs}: {
   deps = [
+    pkgs.netcat
     pkgs.rustc
     pkgs.libiconv
     pkgs.cargo
