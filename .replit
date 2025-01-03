@@ -12,13 +12,13 @@ deploymentTarget = "cloudrun"
 
 [[ports]]
 localPort = 8050
-externalPort = 8050
+externalPort = 3000
 protocol = "http"
 description = "Dash app"
 
 [[ports]]
 localPort = 8501
-externalPort = 8501
+externalPort = 3001
 protocol = "http"
 description = "Streamlit app"
 
