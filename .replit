@@ -1,5 +1,5 @@
 
-run = "bash -c 'python src/dashboard/dashboard.py --host=0.0.0.0 --port=8050 & streamlit run src/dashboard/file_upload_streamlit.py --server.port=8501 --server.address=0.0.0.0 --server.enableCORS=false --server.enableXsrfProtection=false --server.enableWebsocketCompression=false & wait'"
+run = "bash -c 'trap \"kill 0\" EXIT; python src/dashboard/dashboard.py --host=0.0.0.0 --port=8050 & streamlit run src/dashboard/file_upload_streamlit.py --server.port=8501 --server.address=0.0.0.0 --server.enableCORS=false --server.enableXsrfProtection=false --server.enableWebsocketCompression=false & wait'"
 
 modules = ["python-3.10:v25-20230920-d4ad2e4"]
 
@@ -7,17 +7,17 @@ modules = ["python-3.10:v25-20230920-d4ad2e4"]
 channel = "stable-23_11"
 
 [deployment]
-run = "bash -c 'python src/dashboard/dashboard.py --host=0.0.0.0 --port=8050 & streamlit run src/dashboard/file_upload_streamlit.py --server.port=8501 --server.address=0.0.0.0 --server.enableCORS=false --server.enableXsrfProtection=false --server.enableWebsocketCompression=false & wait'"
+run = "bash -c 'trap \"kill 0\" EXIT; python src/dashboard/dashboard.py --host=0.0.0.0 --port=8050 & streamlit run src/dashboard/file_upload_streamlit.py --server.port=8501 --server.address=0.0.0.0 --server.enableCORS=false --server.enableXsrfProtection=false --server.enableWebsocketCompression=false & wait'"
 deploymentTarget = "cloudrun"
 
 [[ports]]
-localPort = 8050
-externalPort = 80
+localPort = 8050 
+externalPort = 3000
 protocol = "http"
 description = "Dash app"
 
 [[ports]]
 localPort = 8501
-externalPort = 8501
+externalPort = 3001
 protocol = "http"
 description = "Streamlit app"
