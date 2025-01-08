@@ -10,12 +10,13 @@ import bcrypt
 import sys
 
 sys.path.append('src/')  # updating path back to root for importing modules
-from utils import validate_dataframe, write_df_to_s3
+from utils import validate_dataframe, write_df_to_s3, run_athena_query_no_results
 from models import KatanaInventory, KatanaRecipeIngredient, ManufacturingOrder
 
 # AWS S3 Configuration
 S3_BUCKET = os.getenv('S3_BUCKET_NAME')
 S3_REGION = 'us-east-1'
+GLUE_DATABASE = os.getenv('GLUE_DATABASE_NAME')
 
 # Streamlit server configuration
 st.set_page_config(page_title="CSV Uploader",
@@ -192,6 +193,21 @@ if __name__ == '__main__':
                         except Exception as e:
                             st.error(f'Error writing to s3: {str(e)}')
                             raise ValueError(f'Error writing data! {str(e)}')
+
+                        # -----------------
+                        # Run Athena query to update partitions
+                        # -----------------
+                        logger.info('Running MKSCK REPAIR TABLE to update partitions')
+
+                        # Define SQL query
+                        sql_query = f"""MSCK REPAIR TABLE {glue_table}"""
+
+                        logger.info(f'SQL query: {sql_query}')
+
+                        run_athena_query_no_results(query=sql_query,
+                                                    bucket=S3_BUCKET,
+                                                    database=GLUE_DATABASE,
+                                                    region=S3_REGION)
     
                 except Exception as e:
                     st.error(f"An error occurred: {e}")
