@@ -19,9 +19,5 @@ description = "Dash app"
 [[ports]]
 localPort = 8501
 externalPort = 3001
-protocol = "http"
+protocol = "ws"
 description = "Streamlit app"
-
-[auth]
-pageEnabled = false
-buttonEnabled = false
