@@ -37,8 +37,8 @@ if __name__ == '__main__':
     config.set_option('browser.serverAddress', '0.0.0.0')
     config.set_option('server.enableCORS', True)
     config.set_option('server.enableXsrfProtection', False)
-    config.set_option('server.enableWebsocketCompression', False)
-    config.set_option('server.headless', True)
+    config.set_option('browser.gatherUsageStats', False)
+    config.set_option('server.baseUrlPath', '')
     config.set_option('server.maxUploadSize', 5)
 
 

@@ -21,9 +21,3 @@ localPort = 8501
 externalPort = 3001
 protocol = "http"
 description = "Streamlit app"
-
-[[ports]]
-localPort = 8501
-externalPort = 3001
-protocol = "ws"
-description = "Streamlit WebSocket"
