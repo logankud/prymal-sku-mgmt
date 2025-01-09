@@ -303,10 +303,10 @@ app.layout = html.Div([
                     html.Label('Select Est. Stock Days On Hand Range:', style={'fontWeight': 'bold'}),
                     dcc.RangeSlider(
                         id='est-stock-days-slider',
-                        min=cache['est_stock_days_on_hand_min'],
-                        max=cache['est_stock_days_on_hand_max'],
-                        value=[cache['est_stock_days_on_hand_min'], cache['est_stock_days_on_hand_max']],
-                        marks={i: str(i) for i in range(cache['est_stock_days_on_hand_min'], cache['est_stock_days_on_hand_max']+1, 10)},
+                        min=int(cache['est_stock_days_on_hand_min']),
+                        max=int(cache['est_stock_days_on_hand_max']),
+                        value=[int(cache['est_stock_days_on_hand_min']), int(cache['est_stock_days_on_hand_max'])],
+                        marks={i: str(i) for i in range(int(cache['est_stock_days_on_hand_min']), int(cache['est_stock_days_on_hand_max'])+1, 10)},
                         step=1,
                         allowCross=False
                     )
