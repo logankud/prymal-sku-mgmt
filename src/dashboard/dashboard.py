@@ -657,7 +657,7 @@ def update_dashboard(selected_product):
                 go.Figure(), go.Figure())
 
     # Filter inventory data for the selected product
-    inventory_run_rate_df = cache['inventory_run_rate_df'][cache['inventory_run_rate_df']['name'] == selected_product]
+    inventory_run_rate_df = cache['inventory_run_rate_df'][cache['inventory_run_rate_df']['name'] == selected_product].copy()
 
     if inventory_run_rate_df.empty:
         # Indicators as "-"
@@ -667,9 +667,9 @@ def update_dashboard(selected_product):
 
     else:
         # Convert inventory data types appropriately
-        inventory_run_rate_df['restock_point'] = inventory_run_rate_df['restock_point'].astype(float).round().astype('int64')
-        inventory_run_rate_df['est_stock_days_on_hand'] = inventory_run_rate_df['est_stock_days_on_hand'].astype(float).round().astype('int64')
-        inventory_run_rate_df['run_rate'] = inventory_run_rate_df['run_rate'].astype(float).round().astype('int64')  # Changed to int
+        inventory_run_rate_df.loc[:, 'restock_point'] = inventory_run_rate_df['restock_point'].astype(float).round().astype('int64')
+        inventory_run_rate_df.loc[:, 'est_stock_days_on_hand'] = inventory_run_rate_df['est_stock_days_on_hand'].astype(float).round().astype('int64')
+        inventory_run_rate_df.loc[:, 'run_rate'] = inventory_run_rate_df['run_rate'].astype(float).round().astype('int64')  # Changed to int
 
         inventory_run_rate_df = inventory_run_rate_df.astype({
             'inventory_id': 'int64',
