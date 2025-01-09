@@ -29,12 +29,17 @@ cache = {
     'est_stock_days_on_hand_max': None
 }
 
-def load_data():
+def load_data() -> Tuple[pd.DataFrame, pd.DataFrame, List[Dict[str, str]], pd.DataFrame, float, float]:
     """
     Load and prepare data for the dashboard
     Returns:
-        Tuple containing inventory run rate data, merged data, product options,
-        inventory details, and stock days on hand min/max values
+        Tuple containing:
+            - inventory_run_rate_df (pd.DataFrame): Inventory run rate data
+            - merged_df (pd.DataFrame): Merged data
+            - product_options (List[Dict[str, str]]): Product options for dropdown
+            - inventory_details_df (pd.DataFrame): Inventory details
+            - est_stock_days_on_hand_min (float): Minimum stock days on hand
+            - est_stock_days_on_hand_max (float): Maximum stock days on hand
     """
     # Fetch all inventory data for the latest partition_date
     inventory_query = """
@@ -73,20 +78,24 @@ def load_data():
             est_stock_days_on_hand_min, est_stock_days_on_hand_max)
 
 # Initialize data if not already loaded
-if not cache['data_loaded']:
-    (cache['inventory_run_rate_df'], cache['merged_df'], cache['product_options'],
-     cache['inventory_details_df'], cache['est_stock_days_on_hand_min'], 
-     cache['est_stock_days_on_hand_max']) = load_data()
-    cache['data_loaded'] = True
+try:
+    if not cache['data_loaded']:
+        (cache['inventory_run_rate_df'], cache['merged_df'], cache['product_options'],
+         cache['inventory_details_df'], cache['est_stock_days_on_hand_min'], 
+         cache['est_stock_days_on_hand_max']) = load_data()
+        cache['data_loaded'] = True
+except Exception as e:
+    print(f"Error initializing cache: {str(e)}")
+    # Set default values
+    cache['data_loaded'] = False
+    cache['inventory_run_rate_df'] = pd.DataFrame()
+    cache['merged_df'] = pd.DataFrame()
+    cache['product_options'] = []
+    cache['inventory_details_df'] = pd.DataFrame()
+    cache['est_stock_days_on_hand_min'] = 0
+    cache['est_stock_days_on_hand_max'] = 100
 
-# Fetch data once and cache it
-def load_data():
-    # Fetch all inventory data for the latest partition_date
-    inventory_query = """
-    SELECT *
-    FROM shipbob_inventory_run_rate
-    WHERE partition_date = (SELECT MAX(partition_date) FROM shipbob_inventory_run_rate)
-    """
+# Cache initialization is handled at startup
     inventory_run_rate_df = run_athena_query(query=inventory_query, database=GLUE_DATABASE, region=REGION,
                                              s3_bucket=S3_BUCKET)
 
@@ -664,11 +673,6 @@ def update_dashboard(selected_product):
             return ("-", "-", "-", "-",
                     html.Div(['No inventory data available for the selected product.']),
                     go.Figure(), go.Figure())
-        return ("-", "-", "-", "-",
-                html.Div(['No inventory data available for the selected product.']),
-                go.Figure(), go.Figure())
-
-    else:
         # Convert inventory data types appropriately
         inventory_run_rate_df.loc[:, 'restock_point'] = inventory_run_rate_df['restock_point'].astype(float).round().astype('int64')
         inventory_run_rate_df.loc[:, 'est_stock_days_on_hand'] = inventory_run_rate_df['est_stock_days_on_hand'].astype(float).round().astype('int64')
