@@ -660,271 +660,288 @@ def toggle_time_series(n_clicks, current_style):
 def update_dashboard(selected_product):
     try:
         # Use the cached data
-        if not selected_product:
-            # Default values or empty indicators
-            return ("-", "-", "-", "-",
-                    html.Div(['Please select a product to view its inventory status and sales data.']),
-                    go.Figure(), go.Figure())
+        try:
+            # Filter inventory data for the selected product
+            if not selected_product:
+                # Default values or empty indicators
+                return ("-", "-", "-", "-",
+                        html.Div(['Please select a product to view its inventory status and sales data.']),
+                        go.Figure(), go.Figure())
 
-        # Filter inventory data for the selected product
-        inventory_run_rate_df = cache['inventory_run_rate_df'][cache['inventory_run_rate_df']['name'] == selected_product].copy()
-        
-        if inventory_run_rate_df.empty:
-            return ("-", "-", "-", "-",
-                    html.Div(['No inventory data available for the selected product.']),
-                    go.Figure(), go.Figure())
-        # Convert inventory data types appropriately
-        inventory_run_rate_df.loc[:, 'restock_point'] = inventory_run_rate_df['restock_point'].astype(float).round().astype('int64')
-        inventory_run_rate_df.loc[:, 'est_stock_days_on_hand'] = inventory_run_rate_df['est_stock_days_on_hand'].astype(float).round().astype('int64')
-        inventory_run_rate_df.loc[:, 'run_rate'] = inventory_run_rate_df['run_rate'].astype(float).round().astype('int64')  # Changed to int
+            # Filter inventory data for the selected product
+            inventory_run_rate_df = cache['inventory_run_rate_df'][cache['inventory_run_rate_df']['name'] == selected_product].copy()
 
-        inventory_run_rate_df = inventory_run_rate_df.astype({
-            'inventory_id': 'int64',
-            'total_fulfillable_quantity': 'int64',
-            'est_stock_days_on_hand': 'int64',
-            'estimated_stockout_date': 'datetime64[ns]',
-            'restock_point': 'int64',
-            'actual_qty_sold_last_30_days': 'int64',
-            'actual_qty_sold_last_60_days': 'int64',
-            'actual_qty_sold_last_90_days': 'int64'
-        })
+            if inventory_run_rate_df.empty:
+                return ("-", "-", "-", "-",
+                        html.Div(['No inventory data available for the selected product.']),
+                        go.Figure(), go.Figure())
+            # Convert inventory data types appropriately
+            inventory_run_rate_df.loc[:, 'restock_point'] = inventory_run_rate_df['restock_point'].astype(float).round().astype('int64')
+            inventory_run_rate_df.loc[:, 'est_stock_days_on_hand'] = inventory_run_rate_df['est_stock_days_on_hand'].astype(float).round().astype('int64')
 
-        # Extract metrics for stat cards
-        quantity_in_stock = inventory_run_rate_df['total_fulfillable_quantity'].iloc[0]
-        est_stock_days_on_hand = inventory_run_rate_df['est_stock_days_on_hand'].iloc[0]
-        est_stockout_date = inventory_run_rate_df['estimated_stockout_date'].iloc[0]
-        daily_run_rate = inventory_run_rate_df['run_rate'].iloc[0]
+            # Filter merged data for the selected product
+            product_df = cache['merged_df'][cache['merged_df']['name'] == selected_product]
 
-        # Format the estimated stockout date
-        if pd.notnull(est_stockout_date):
-            est_stockout_date_formatted = est_stockout_date.strftime('%Y-%m-%d')
-        else:
-            est_stockout_date_formatted = "N/A"
+            # Filter inventory_details_df for the selected product
+            inventory_details_df = cache['inventory_details_df'][cache['inventory_details_df']['name'] == selected_product]
 
-        # Reorder columns if desired
-        columns_order = ['inventory_id', 'name', 'run_rate', 'total_fulfillable_quantity', 'restock_point',
-                         'est_stock_days_on_hand', 'estimated_stockout_date',
-                         'actual_qty_sold_last_30_days', 'actual_qty_sold_last_60_days', 'actual_qty_sold_last_90_days']
-        inventory_run_rate_df = inventory_run_rate_df[columns_order]
+            # Ensure 'restock_point' is defined before using it
+            try:
+                restock_point = int(inventory_run_rate_df['restock_point'].iloc[0])
+            except (KeyError, IndexError, ValueError) as e:
+                restock_point = 0  # Assign a default value or handle as needed
+                print(f"Error defining restock_point: {e}")
 
-        # Create interactive DataTable
-        inventory_table = dash_table.DataTable(
-            data=inventory_run_rate_df.to_dict('records'),
-            columns=[
-                {'name': 'Shipbob Inventory ID', 'id': 'inventory_id'},
-                {'name': 'Name', 'id': 'name'},
-                {'name': 'Daily Run Rate', 'id': 'run_rate'},
-                {'name': 'Total Fulfillable Quantity', 'id': 'total_fulfillable_quantity'},
-                {'name': 'Restock Point', 'id': 'restock_point'},
-                {'name': 'Est. Stock Days On Hand', 'id': 'est_stock_days_on_hand'},
-                {'name': 'Est. Stockout Date', 'id': 'estimated_stockout_date'},
-                {'name': 'Actual Qty. Sold - Past 30 Days', 'id': 'actual_qty_sold_last_30_days'},
-                {'name': 'Actual Qty. Sold - Past 60 Days', 'id': 'actual_qty_sold_last_60_days'},
-                {'name': 'Actual Qty. Sold - Past 90 Days', 'id': 'actual_qty_sold_last_90_days'},
-            ],
-            style_table={'overflowX': 'auto'},
-            style_cell={
-                'minWidth': '150px', 'width': '180px', 'maxWidth': '200px',
-                'whiteSpace': 'normal',
-                'textAlign': 'left',
-                'padding': '5px',
-                'color': 'black',
-                'backgroundColor': 'white'
-            },
-            style_header={
-                'backgroundColor': '#003366',
-                'color': 'white',
-                'fontWeight': 'bold',
-                'textAlign': 'center'
-            },
-            style_data_conditional=[
-                {
-                    'if': {'row_index': 'odd'},
-                    'backgroundColor': '#f2f2f2'
-                }
-            ],
-            page_size=10,
-            sort_action='native',
-            filter_action='native',
-            row_selectable='multi',
-            tooltip_delay=0,
-            tooltip_duration=None,
-        )
+            # Ensure 'daily_run_rate' is defined
+            try:
+                daily_run_rate = int(inventory_run_rate_df['run_rate'].iloc[0])
+            except (KeyError, IndexError, ValueError) as e:
+                daily_run_rate = 0  # Assign a default value or handle as needed
+                print(f"Error defining daily_run_rate: {e}")
 
-    # Filter merged data for the selected product
-    product_df = cache['merged_df'][cache['merged_df']['name'] == selected_product]
+            # Create fig1: Actual Quantity Sold and Run Rate
+            if product_df.empty:
+                fig1 = go.Figure()
+                fig1.add_annotation(text="No sales data available for the selected product.",
+                                    xref="paper", yref="paper",
+                                    showarrow=False, font=dict(size=20))
+            else:
+                fig1 = go.Figure()
 
-    # Filter inventory_details_df for the selected product
-    inventory_details_df = cache['inventory_details_df'][cache['inventory_details_df']['name'] == selected_product]
-
-    # Ensure 'restock_point' is defined before using it
-    try:
-        restock_point = int(inventory_run_rate_df['restock_point'].iloc[0])
-    except (KeyError, IndexError, ValueError) as e:
-        restock_point = 0  # Assign a default value or handle as needed
-        print(f"Error defining restock_point: {e}")
-
-    # Ensure 'daily_run_rate' is defined
-    try:
-        daily_run_rate = int(inventory_run_rate_df['run_rate'].iloc[0])
-    except (KeyError, IndexError, ValueError) as e:
-        daily_run_rate = 0  # Assign a default value or handle as needed
-        print(f"Error defining daily_run_rate: {e}")
-
-    # Create fig1: Actual Quantity Sold and Run Rate
-    if product_df.empty:
-        fig1 = go.Figure()
-        fig1.add_annotation(text="No sales data available for the selected product.",
-                            xref="paper", yref="paper",
-                            showarrow=False, font=dict(size=20))
-    else:
-        fig1 = go.Figure()
-
-        # Actual quantity sold
-        fig1.add_trace(go.Scatter(
-            x=product_df['created_date'],
-            y=product_df['inventory_qty'],
-            mode='lines+markers',
-            name='Actual Quantity Sold',
-            line=dict(color='#1f77b4'),
-            marker=dict(color='#1f77b4')
-        ))
-
-        # Add 'Daily Run Rate' as a horizontal line using Scatter
-        fig1.add_trace(go.Scatter(
-            x=[product_df['created_date'].min(), product_df['created_date'].max()],
-            y=[daily_run_rate, daily_run_rate],
-            mode='lines',
-            name='Daily Run Rate',
-            line=dict(color='#ff7f0e', dash='dash'),
-        ))
-
-        fig1.update_layout(
-            title='Actual Qty. Sold & Current Daily Run Rate',
-            title_font_size=20,
-            xaxis_title='Date',
-            yaxis=dict(
-                title='Quantity',
-                autorange=True
-            ),
-            legend_title='Legend',
-            legend=dict(
-                x=1.02,
-                y=1,
-                traceorder='normal',
-                font=dict(size=12),
-                bgcolor='rgba(0,0,0,0)',
-                bordercolor='rgba(0,0,0,0)'
-            ),
-            xaxis=dict(
-                rangeselector=dict(
-                    buttons=list([
-                        dict(count=7, label='1w', step='day', stepmode='backward'),
-                        dict(count=1, label='1m', step='month', stepmode='backward'),
-                        dict(count=3, label='3m', step='month', stepmode='backward'),
-                        dict(step='all')
-                    ])
-                ),
-                rangeslider=dict(visible=True),
-                type='date'
-            ),
-            plot_bgcolor='#f9f9f9',
-            paper_bgcolor='#ffffff',
-            font=dict(color='#333333'),
-            margin=dict(l=50, r=150, t=50, b=50)
-        )
-
-    # Create fig2: Inventory On Hand and Restock Point
-    if inventory_details_df.empty:
-        fig2 = go.Figure()
-        fig2.add_annotation(text="No inventory data available for the selected product.",
-                            xref="paper", yref="paper",
-                            showarrow=False, font=dict(size=20))
-    else:
-        fig2 = go.Figure()
-
-        # Inventory on hand over time
-        inventory_details_df = inventory_details_df.sort_values('partition_date')
-        fig2.add_trace(go.Scatter(
-            x=inventory_details_df['partition_date'],
-            y=inventory_details_df['total_fulfillable_quantity'],
-            mode='lines+markers',
-            name='Inventory On Hand',
-            line=dict(color='#2ca02c'),
-            marker=dict(color='#2ca02c')
-        ))
-
-        # Restock Point as a horizontal line using Scatter
-        fig2.add_trace(go.Scatter(
-            x=[inventory_details_df['partition_date'].min(), inventory_details_df['partition_date'].max()],
-            y=[restock_point, restock_point],
-            mode='lines',
-            name='Restock Point',
-            line=dict(color='green', dash='dot'),
-        ))
-
-        # Estimated Stockout Date vertical line as a Scatter trace
-        est_stockout_date = inventory_run_rate_df['estimated_stockout_date'].iloc[0]
-
-        if pd.notnull(est_stockout_date):
-            est_stockout_date = pd.to_datetime(est_stockout_date)
-
-            if est_stockout_date:
-                ymin = inventory_details_df['total_fulfillable_quantity'].min() * 0.95
-                ymax = inventory_details_df['total_fulfillable_quantity'].max() * 1.05
-
-                fig2.add_trace(go.Scatter(
-                    x=[est_stockout_date, est_stockout_date],
-                    y=[ymin, ymax],
-                    mode='lines',
-                    name='Estimated Stockout Date',
-                    line=dict(color='red', dash='dot'),
+                # Actual quantity sold
+                fig1.add_trace(go.Scatter(
+                    x=product_df['created_date'],
+                    y=product_df['inventory_qty'],
+                    mode='lines+markers',
+                    name='Actual Quantity Sold',
+                    line=dict(color='#1f77b4'),
+                    marker=dict(color='#1f77b4')
                 ))
 
-        fig2.update_layout(
-            title='Inventory On Hand Trend',
-            title_font_size=20,
-            xaxis_title='Date',
-            yaxis=dict(
-                title='Quantity',
-                autorange=True
-            ),
-            legend_title='Legend',
-            legend=dict(
-                x=1.02,
-                y=1,
-                traceorder='normal',
-                font=dict(size=12),
-                bgcolor='rgba(0,0,0,0)',
-                bordercolor='rgba(0,0,0,0)'
-            ),
-            xaxis=dict(
-                rangeselector=dict(
-                    buttons=list([
-                        dict(count=7, label='1w', step='day', stepmode='backward'),
-                        dict(count=1, label='1m', step='month', stepmode='backward'),
-                        dict(count=3, label='3m', step='month', stepmode='backward'),
-                        dict(step='all')
-                    ])
-                ),
-                rangeslider=dict(visible=True),
-                type='date'
-            ),
-            plot_bgcolor='#f9f9f9',
-            paper_bgcolor='#ffffff',
-            font=dict(color='#333333'),
-            margin=dict(l=50, r=150, t=50, b=50)
-        )
+                # Add 'Daily Run Rate' as a horizontal line using Scatter
+                fig1.add_trace(go.Scatter(
+                    x=[product_df['created_date'].min(), product_df['created_date'].max()],
+                    y=[daily_run_rate, daily_run_rate],
+                    mode='lines',
+                    name='Daily Run Rate',
+                    line=dict(color='#ff7f0e', dash='dash'),
+                ))
+
+                fig1.update_layout(
+                    title='Actual Qty. Sold & Current Daily Run Rate',
+                    title_font_size=20,
+                    xaxis_title='Date',
+                    yaxis=dict(
+                        title='Quantity',
+                        autorange=True
+                    ),
+                    legend_title='Legend',
+                    legend=dict(
+                        x=1.02,
+                        y=1,
+                        traceorder='normal',
+                        font=dict(size=12),
+                        bgcolor='rgba(0,0,0,0)',
+                        bordercolor='rgba(0,0,0,0)'
+                    ),
+                    xaxis=dict(
+                        rangeselector=dict(
+                            buttons=list([
+                                dict(count=7, label='1w', step='day', stepmode='backward'),
+                                dict(count=1, label='1m', step='month', stepmode='backward'),
+                                dict(count=3, label='3m', step='month', stepmode='backward'),
+                                dict(step='all')
+                            ])
+                        ),
+                        rangeslider=dict(visible=True),
+                        type='date'
+                    ),
+                    plot_bgcolor='#f9f9f9',
+                    paper_bgcolor='#ffffff',
+                    font=dict(color='#333333'),
+                    margin=dict(l=50, r=150, t=50, b=50)
+                )
+
+            # Create fig2: Inventory On Hand and Restock Point
+            if inventory_details_df.empty:
+                fig2 = go.Figure()
+                fig2.add_annotation(text="No inventory data available for the selected product.",
+                                    xref="paper", yref="paper",
+                                    showarrow=False, font=dict(size=20))
+            else:
+                fig2 = go.Figure()
+
+                # Inventory on hand over time
+                inventory_details_df = inventory_details_df.sort_values('partition_date')
+                fig2.add_trace(go.Scatter(
+                    x=inventory_details_df['partition_date'],
+                    y=inventory_details_df['total_fulfillable_quantity'],
+                    mode='lines+markers',
+                    name='Inventory On Hand',
+                    line=dict(color='#2ca02c'),
+                    marker=dict(color='#2ca02c')
+                ))
+
+                # Restock Point as a horizontal line using Scatter
+                fig2.add_trace(go.Scatter(
+                    x=[inventory_details_df['partition_date'].min(), inventory_details_df['partition_date'].max()],
+                    y=[restock_point, restock_point],
+                    mode='lines',
+                    name='Restock Point',
+                    line=dict(color='green', dash='dot'),
+                ))
+
+                # Estimated Stockout Date vertical line as a Scatter trace
+                est_stockout_date = inventory_run_rate_df['estimated_stockout_date'].iloc[0]
+
+                if pd.notnull(est_stockout_date):
+                    est_stockout_date = pd.to_datetime(est_stockout_date)
+
+                    if est_stockout_date:
+                        ymin = inventory_details_df['total_fulfillable_quantity'].min() * 0.95
+                        ymax = inventory_details_df['total_fulfillable_quantity'].max() * 1.05
+
+                        fig2.add_trace(go.Scatter(
+                            x=[est_stockout_date, est_stockout_date],
+                            y=[ymin, ymax],
+                            mode='lines',
+                            name='Estimated Stockout Date',
+                            line=dict(color='red', dash='dot'),
+                        ))
+
+                fig2.update_layout(
+                    title='Inventory On Hand Trend',
+                    title_font_size=20,
+                    xaxis_title='Date',
+                    yaxis=dict(
+                        title='Quantity',
+                        autorange=True
+                    ),
+                    legend_title='Legend',
+                    legend=dict(
+                        x=1.02,
+                        y=1,
+                        traceorder='normal',
+                        font=dict(size=12),
+                        bgcolor='rgba(0,0,0,0)',
+                        bordercolor='rgba(0,0,0,0)'
+                    ),
+                    xaxis=dict(
+                        rangeselector=dict(
+                            buttons=list([
+                                dict(count=7, label='1w', step='day', stepmode='backward'),
+                                dict(count=1, label='1m', step='month', stepmode='backward'),
+                                dict(count=3, label='3m', step='month', stepmode='backward'),
+                                dict(step='all')
+                            ])
+                        ),
+                        rangeslider=dict(visible=True),
+                        type='date'
+                    ),
+                    plot_bgcolor='#f9f9f9',
+                    paper_bgcolor='#ffffff',
+                    font=dict(color='#333333'),
+                    margin=dict(l=50, r=150, t=50, b=50)
+                )
+
+            # Convert inventory data types appropriately
+            inventory_run_rate_df.loc[:, 'restock_point'] = inventory_run_rate_df['restock_point'].astype(float).round().astype('int64')
+            inventory_run_rate_df.loc[:, 'est_stock_days_on_hand'] = inventory_run_rate_df['est_stock_days_on_hand'].astype(float).round().astype('int64')
+            inventory_run_rate_df.loc[:, 'run_rate'] = inventory_run_rate_df['run_rate'].astype(float).round().astype('int64')  # Changed to int
+
+            inventory_run_rate_df = inventory_run_rate_df.astype({
+                'inventory_id': 'int64',
+                'total_fulfillable_quantity': 'int64',
+                'est_stock_days_on_hand': 'int64',
+                'estimated_stockout_date': 'datetime64[ns]',
+                'restock_point': 'int64',
+                'actual_qty_sold_last_30_days': 'int64',
+                'actual_qty_sold_last_60_days': 'int64',
+                'actual_qty_sold_last_90_days': 'int64'
+            })
+
+            # Extract metrics for stat cards
+            quantity_in_stock = inventory_run_rate_df['total_fulfillable_quantity'].iloc[0]
+            est_stock_days_on_hand = inventory_run_rate_df['est_stock_days_on_hand'].iloc[0]
+            est_stockout_date = inventory_run_rate_df['estimated_stockout_date'].iloc[0]
+            daily_run_rate = inventory_run_rate_df['run_rate'].iloc[0]
+
+            # Format the estimated stockout date
+            if pd.notnull(est_stockout_date):
+                est_stockout_date_formatted = est_stockout_date.strftime('%Y-%m-%d')
+            else:
+                est_stockout_date_formatted = "N/A"
+
+            # Reorder columns if desired
+            columns_order = ['inventory_id', 'name', 'run_rate', 'total_fulfillable_quantity', 'restock_point',
+                             'est_stock_days_on_hand', 'estimated_stockout_date',
+                             'actual_qty_sold_last_30_days', 'actual_qty_sold_last_60_days', 'actual_qty_sold_last_90_days']
+            inventory_run_rate_df = inventory_run_rate_df[columns_order]
+
+            # Create interactive DataTable
+            inventory_table = dash_table.DataTable(
+                data=inventory_run_rate_df.to_dict('records'),
+                columns=[
+                    {'name': 'Shipbob Inventory ID', 'id': 'inventory_id'},
+                    {'name': 'Name', 'id': 'name'},
+                    {'name': 'Daily Run Rate', 'id': 'run_rate'},
+                    {'name': 'Total Fulfillable Quantity', 'id': 'total_fulfillable_quantity'},
+                    {'name': 'Restock Point', 'id': 'restock_point'},
+                    {'name': 'Est. Stock Days On Hand', 'id': 'est_stock_days_on_hand'},
+                    {'name': 'Est. Stockout Date', 'id': 'estimated_stockout_date'},
+                    {'name': 'Actual Qty. Sold - Past 30 Days', 'id': 'actual_qty_sold_last_30_days'},
+                    {'name': 'Actual Qty. Sold - Past 60 Days', 'id': 'actual_qty_sold_last_60_days'},
+                    {'name': 'Actual Qty. Sold - Past 90 Days', 'id': 'actual_qty_sold_last_90_days'},
+                ],
+                style_table={'overflowX': 'auto'},
+                style_cell={
+                    'minWidth': '150px', 'width': '180px', 'maxWidth': '200px',
+                    'whiteSpace': 'normal',
+                    'textAlign': 'left',
+                    'padding': '5px',
+                    'color': 'black',
+                    'backgroundColor': 'white'
+                },
+                style_header={
+                    'backgroundColor': '#003366',
+                    'color': 'white',
+                    'fontWeight': 'bold',
+                    'textAlign': 'center'
+                },
+                style_data_conditional=[
+                    {
+                        'if': {'row_index': 'odd'},
+                        'backgroundColor': '#f2f2f2'
+                    }
+                ],
+                page_size=10,
+                sort_action='native',
+                filter_action='native',
+                row_selectable='multi',
+                tooltip_delay=0,
+                tooltip_duration=None,
+            )
+
+            except Exception as e:
+                print(f"Error in update_dashboard: {str(e)}")
+                return ("-", "-", "-", "-",
+                        html.Div(['An error occurred while updating the dashboard.']),
+                        go.Figure(), go.Figure())
+
+            return (str(quantity_in_stock), str(est_stock_days_on_hand),
+                    str(est_stockout_date_formatted), str(daily_run_rate),
+                    inventory_table, fig1, fig2)
+        except Exception as e:
+            print(f"Error in update_dashboard: {str(e)}")
+            return ("-", "-", "-", "-",
+                    html.Div(['An error occurred while updating the dashboard.']),
+                    go.Figure(), go.Figure())
 
     except Exception as e:
         print(f"Error in update_dashboard: {str(e)}")
         return ("-", "-", "-", "-",
                 html.Div(['An error occurred while updating the dashboard.']),
                 go.Figure(), go.Figure())
-                
-    return (str(quantity_in_stock), str(est_stock_days_on_hand), 
-            str(est_stockout_date_formatted), str(daily_run_rate),
-            inventory_table, fig1, fig2)
 
 # Callback to create KPI cards on the Product Cards Page
 @app.callback(
@@ -943,14 +960,14 @@ def update_kpi_cards(selected_tab, hidden_cards, est_stock_days_range):
 
     # Convert est_stock_days_on_hand to numeric, handling any errors
     df['est_stock_days_on_hand'] = pd.to_numeric(df['est_stock_days_on_hand'], errors='coerce')
-    
+
     # Drop any rows where est_stock_days_on_hand is NaN
     df = df.dropna(subset=['est_stock_days_on_hand'])
-    
+
     # Filter based on est_stock_days_range
     min_range, max_range = est_stock_days_range
     df = df[(df['est_stock_days_on_hand'] >= min_range) & (df['est_stock_days_on_hand'] <= max_range)]
-    
+
     # Convert to integer for display
     df['est_stock_days_on_hand'] = df['est_stock_days_on_hand'].astype(int)
 
