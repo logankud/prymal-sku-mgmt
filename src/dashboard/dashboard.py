@@ -649,15 +649,21 @@ def toggle_time_series(n_clicks, current_style):
     [Input('product-dropdown', 'value')]
 )
 def update_dashboard(selected_product):
-    # Use the cached data
-    if not selected_product:
-        # Default values or empty indicators
-        return ("-", "-", "-", "-",
-                html.Div(['Please select a product to view its inventory status and sales data.']),
-                go.Figure(), go.Figure())
+    try:
+        # Use the cached data
+        if not selected_product:
+            # Default values or empty indicators
+            return ("-", "-", "-", "-",
+                    html.Div(['Please select a product to view its inventory status and sales data.']),
+                    go.Figure(), go.Figure())
 
-    # Filter inventory data for the selected product
-    inventory_run_rate_df = cache['inventory_run_rate_df'][cache['inventory_run_rate_df']['name'] == selected_product].copy()
+        # Filter inventory data for the selected product
+        inventory_run_rate_df = cache['inventory_run_rate_df'][cache['inventory_run_rate_df']['name'] == selected_product].copy()
+        
+        if inventory_run_rate_df.empty:
+            return ("-", "-", "-", "-",
+                    html.Div(['No inventory data available for the selected product.']),
+                    go.Figure(), go.Figure())
 
     if inventory_run_rate_df.empty:
         # Indicators as "-"
@@ -909,7 +915,14 @@ def update_dashboard(selected_product):
             margin=dict(l=50, r=150, t=50, b=50)
         )
 
-    return (quantity_in_stock, est_stock_days_on_hand, est_stockout_date_formatted, daily_run_rate,
+    except Exception as e:
+        print(f"Error in update_dashboard: {str(e)}")
+        return ("-", "-", "-", "-",
+                html.Div(['An error occurred while updating the dashboard.']),
+                go.Figure(), go.Figure())
+                
+    return (str(quantity_in_stock), str(est_stock_days_on_hand), 
+            str(est_stockout_date_formatted), str(daily_run_rate),
             inventory_table, fig1, fig2)
 
 # Callback to create KPI cards on the Product Cards Page
