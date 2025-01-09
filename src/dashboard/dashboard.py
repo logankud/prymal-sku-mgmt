@@ -927,9 +927,18 @@ def update_kpi_cards(selected_tab, hidden_cards, est_stock_days_range):
     # Use the cached data
     df = cache['inventory_run_rate_df'][['name', 'est_stock_days_on_hand']].copy()
 
+    # Convert est_stock_days_on_hand to numeric, handling any errors
+    df['est_stock_days_on_hand'] = pd.to_numeric(df['est_stock_days_on_hand'], errors='coerce')
+    
+    # Drop any rows where est_stock_days_on_hand is NaN
+    df = df.dropna(subset=['est_stock_days_on_hand'])
+    
     # Filter based on est_stock_days_range
     min_range, max_range = est_stock_days_range
     df = df[(df['est_stock_days_on_hand'] >= min_range) & (df['est_stock_days_on_hand'] <= max_range)]
+    
+    # Convert to integer for display
+    df['est_stock_days_on_hand'] = df['est_stock_days_on_hand'].astype(int)
 
     # Sort the DataFrame in ascending order
     df = df.sort_values(by='est_stock_days_on_hand', ascending=True)
