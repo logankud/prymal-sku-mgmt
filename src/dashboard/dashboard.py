@@ -664,9 +664,6 @@ def update_dashboard(selected_product):
             return ("-", "-", "-", "-",
                     html.Div(['No inventory data available for the selected product.']),
                     go.Figure(), go.Figure())
-
-    if inventory_run_rate_df.empty:
-        # Indicators as "-"
         return ("-", "-", "-", "-",
                 html.Div(['No inventory data available for the selected product.']),
                 go.Figure(), go.Figure())
