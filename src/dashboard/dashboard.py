@@ -29,6 +29,49 @@ cache = {
     'est_stock_days_on_hand_max': None
 }
 
+def load_data():
+    """
+    Load and prepare data for the dashboard
+    Returns:
+        Tuple containing inventory run rate data, merged data, product options,
+        inventory details, and stock days on hand min/max values
+    """
+    # Fetch all inventory data for the latest partition_date
+    inventory_query = """
+    SELECT *
+    FROM shipbob_inventory_run_rate
+    WHERE partition_date = (SELECT MAX(partition_date) FROM shipbob_inventory_run_rate)
+    """
+    inventory_run_rate_df = run_athena_query(query=inventory_query, database=GLUE_DATABASE, region=REGION,
+                                           s3_bucket=S3_BUCKET)
+
+    # Fetch order details data for the past 90 days
+    order_details_query = """
+    SELECT 
+        DATE(created_date) as created_date,
+        inventory_name,
+        inventory_id,
+        SUM(inventory_qty) as inventory_qty
+    FROM shipbob_order_details 
+    WHERE created_date >= date_add('day', -90, current_date)
+    GROUP BY DATE(created_date),
+    inventory_name,
+    inventory_id
+    ORDER BY DATE(created_date) ASC
+    """
+    order_details_df = run_athena_query(query=order_details_query, database=GLUE_DATABASE, region=REGION,
+                                      s3_bucket=S3_BUCKET)
+
+    # Process data and return required information
+    merged_df = pd.merge(order_details_df, inventory_run_rate_df, on='inventory_id', how='left')
+    product_options = [{'label': name, 'value': name} for name in sorted(inventory_run_rate_df['name'].unique())]
+    inventory_details_df = pd.DataFrame()  # You may want to modify this based on your needs
+    est_stock_days_on_hand_min = inventory_run_rate_df['est_stock_days_on_hand'].min()
+    est_stock_days_on_hand_max = inventory_run_rate_df['est_stock_days_on_hand'].max()
+
+    return (inventory_run_rate_df, merged_df, product_options, inventory_details_df,
+            est_stock_days_on_hand_min, est_stock_days_on_hand_max)
+
 # Initialize data if not already loaded
 if not cache['data_loaded']:
     (cache['inventory_run_rate_df'], cache['merged_df'], cache['product_options'],
