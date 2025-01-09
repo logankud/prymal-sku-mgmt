@@ -18,13 +18,23 @@ GLUE_DATABASE = os.getenv('GLUE_DATABASE_NAME')
 app = dash.Dash(__name__)
 app.title = "Prymal Inventory Dashboard"
 
-# Global variables to hold cached data
-inventory_run_rate_df_cached = None
-merged_df_cached = None
-product_options = None
-inventory_details_df_cached = None
-est_stock_days_on_hand_min = None
-est_stock_days_on_hand_max = None
+# Create cache dictionary
+cache = {
+    'data_loaded': False,
+    'inventory_run_rate_df': None,
+    'merged_df': None,
+    'product_options': None,
+    'inventory_details_df': None,
+    'est_stock_days_on_hand_min': None,
+    'est_stock_days_on_hand_max': None
+}
+
+# Initialize data if not already loaded
+if not cache['data_loaded']:
+    (cache['inventory_run_rate_df'], cache['merged_df'], cache['product_options'],
+     cache['inventory_details_df'], cache['est_stock_days_on_hand_min'], 
+     cache['est_stock_days_on_hand_max']) = load_data()
+    cache['data_loaded'] = True
 
 # Fetch data once and cache it
 def load_data():
@@ -160,9 +170,6 @@ def load_data():
     return (inventory_run_rate_df, merged_df, product_options, inventory_details_df,
             est_stock_days_on_hand_min, est_stock_days_on_hand_max)
 
-# Load data and cache it
-(inventory_run_rate_df_cached, merged_df_cached, product_options,
- inventory_details_df_cached, est_stock_days_on_hand_min, est_stock_days_on_hand_max) = load_data()
 
 # Define the legend data
 def get_legend_data():
@@ -253,10 +260,10 @@ app.layout = html.Div([
                     html.Label('Select Est. Stock Days On Hand Range:', style={'fontWeight': 'bold'}),
                     dcc.RangeSlider(
                         id='est-stock-days-slider',
-                        min=est_stock_days_on_hand_min,
-                        max=est_stock_days_on_hand_max,
-                        value=[est_stock_days_on_hand_min, est_stock_days_on_hand_max],
-                        marks={i: str(i) for i in range(est_stock_days_on_hand_min, est_stock_days_on_hand_max+1, 10)},
+                        min=cache['est_stock_days_on_hand_min'],
+                        max=cache['est_stock_days_on_hand_max'],
+                        value=[cache['est_stock_days_on_hand_min'], cache['est_stock_days_on_hand_max']],
+                        marks={i: str(i) for i in range(cache['est_stock_days_on_hand_min'], cache['est_stock_days_on_hand_max']+1, 10)},
                         step=1,
                         allowCross=False
                     )
@@ -280,7 +287,7 @@ app.layout = html.Div([
                 html.H2('Product Selection', style={'textAlign': 'center', 'color': '#ffffff'}),
                 dcc.Dropdown(
                     id='product-dropdown',
-                    options=product_options if product_options else [],
+                    options=cache['product_options'] if cache['product_options'] else [],
                     placeholder='Select an Inventory Item',
                     style={
                         'margin': '20px',
@@ -599,9 +606,7 @@ def toggle_time_series(n_clicks, current_style):
     [Input('product-dropdown', 'value')]
 )
 def update_dashboard(selected_product):
-    # Use the globally cached data
-    global inventory_run_rate_df_cached, merged_df_cached, inventory_details_df_cached
-
+    # Use the cached data
     if not selected_product:
         # Default values or empty indicators
         return ("-", "-", "-", "-",
@@ -609,7 +614,7 @@ def update_dashboard(selected_product):
                 go.Figure(), go.Figure())
 
     # Filter inventory data for the selected product
-    inventory_run_rate_df = inventory_run_rate_df_cached[inventory_run_rate_df_cached['name'] == selected_product]
+    inventory_run_rate_df = cache['inventory_run_rate_df'][cache['inventory_run_rate_df']['name'] == selected_product]
 
     if inventory_run_rate_df.empty:
         # Indicators as "-"
@@ -697,10 +702,10 @@ def update_dashboard(selected_product):
         )
 
     # Filter merged data for the selected product
-    product_df = merged_df_cached[merged_df_cached['name'] == selected_product]
+    product_df = cache['merged_df'][cache['merged_df']['name'] == selected_product]
 
     # Filter inventory_details_df for the selected product
-    inventory_details_df = inventory_details_df_cached[inventory_details_df_cached['name'] == selected_product]
+    inventory_details_df = cache['inventory_details_df'][cache['inventory_details_df']['name'] == selected_product]
 
     # Ensure 'restock_point' is defined before using it
     try:
@@ -876,11 +881,8 @@ def update_kpi_cards(selected_tab, hidden_cards, est_stock_days_range):
         # Return empty list if not on the Product Cards Page
         return []
 
-    # Use the globally cached data
-    global inventory_run_rate_df_cached
-
-    # Data preparation
-    df = inventory_run_rate_df_cached[['name', 'est_stock_days_on_hand']].copy()
+    # Use the cached data
+    df = cache['inventory_run_rate_df'][['name', 'est_stock_days_on_hand']].copy()
 
     # Filter based on est_stock_days_range
     min_range, max_range = est_stock_days_range
@@ -998,4 +1000,3 @@ def update_product_dropdown(selected_product):
 
 if __name__ == '__main__':
     app.run_server(host='0.0.0.0', port=8050, debug=True)
-
