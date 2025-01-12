@@ -1,0 +1,32 @@
+[W 2025-01-12 17:35:15.804 ServerApp] All authentication is disabled.  Anyone who can connect to this server will be able to run code.
+[I 2025-01-12 17:35:15.806 ServerApp] notebook_shim | extension was successfully loaded.
+[I 2025-01-12 17:35:15.806 FileIdExtension] Configured File ID manager: ArbitraryFileIdManager
+[I 2025-01-12 17:35:15.807 FileIdExtension] ArbitraryFileIdManager : Configured root dir: /home/runner/workspace
+[I 2025-01-12 17:35:15.807 FileIdExtension] ArbitraryFileIdManager : Configured database path: /home/runner/workspace/.local/share/jupyter/file_id_manager.db
+[I 2025-01-12 17:35:15.807 FileIdExtension] ArbitraryFileIdManager : Successfully connected to database file.
+[I 2025-01-12 17:35:15.807 FileIdExtension] ArbitraryFileIdManager : Creating File ID tables and indices with journal_mode = DELETE
+[I 2025-01-12 17:35:15.808 ServerApp] jupyter_server_fileid | extension was successfully loaded.
+[I 2025-01-12 17:35:15.809 ServerApp] jupyter_server_ydoc | extension was successfully loaded.
+[I 2025-01-12 17:35:15.812 LabApp] JupyterLab extension loaded from /home/runner/workspace/.pythonlibs/lib/python3.10/site-packages/jupyterlab
+[I 2025-01-12 17:35:15.813 LabApp] JupyterLab application directory is /home/runner/workspace/.pythonlibs/share/jupyter/lab
+[I 2025-01-12 17:35:15.822 ServerApp] jupyterlab | extension was successfully loaded.
+
+  _   _          _      _
+ | | | |_ __  __| |__ _| |_ ___
+ | |_| | '_ \/ _` / _` |  _/ -_)
+  \___/| .__/\__,_\__,_|\__\___|
+       |_|
+                                                                           
+Read the migration plan to Notebook 7 to learn about the new features and the actions to take if you are using extensions.
+
+https://jupyter-notebook.readthedocs.io/en/latest/migrate_to_notebook7.html
+
+Please note that updating to Notebook 7 might break some of your extensions.
+
+[I 2025-01-12 17:35:15.829 ServerApp] nbclassic | extension was successfully loaded.
+[I 2025-01-12 17:35:15.831 ServerApp] Serving notebooks from local directory: /home/runner/workspace
+[I 2025-01-12 17:35:15.831 ServerApp] Jupyter Server 1.24.0 is running at:
+[I 2025-01-12 17:35:15.831 ServerApp] http://ae0b0ce1f0fd:8050/lab
+[I 2025-01-12 17:35:15.831 ServerApp]  or http://127.0.0.1:8050/lab
+[I 2025-01-12 17:35:15.831 ServerApp] Use Control-C to stop this server and shut down all kernels (twice to skip confirmation).
+[I 2025-01-12 17:35:16.413 ServerApp] 302 GET / (172.31.196.119) 0.57ms
