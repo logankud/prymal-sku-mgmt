@@ -1,0 +1,148 @@
+~/workspace$ notebooks/launch_jupyter.sh
+Requirement already satisfied: jupyter==1.0.0 in ./.pythonlibs/lib/python3.10/site-packages (from -r notebooks/requirements.txt (line 1)) (1.0.0)
+Requirement already satisfied: notebook==6.5.6 in ./.pythonlibs/lib/python3.10/site-packages (from -r notebooks/requirements.txt (line 2)) (6.5.6)
+Requirement already satisfied: jupyterlab==3.6.3 in ./.pythonlibs/lib/python3.10/site-packages (from -r notebooks/requirements.txt (line 3)) (3.6.3)
+Requirement already satisfied: jupyter-server==1.24.0 in ./.pythonlibs/lib/python3.10/site-packages (from -r notebooks/requirements.txt (line 4)) (1.24.0)
+Requirement already satisfied: ipykernel in ./.pythonlibs/lib/python3.10/site-packages (from -r notebooks/requirements.txt (line 5)) (6.29.5)
+Requirement already satisfied: pandas in ./.pythonlibs/lib/python3.10/site-packages (from -r notebooks/requirements.txt (line 6)) (2.2.2)
+Requirement already satisfied: numpy in ./.pythonlibs/lib/python3.10/site-packages (from -r notebooks/requirements.txt (line 7)) (2.0.0)
+Requirement already satisfied: plotly in ./.pythonlibs/lib/python3.10/site-packages (from -r notebooks/requirements.txt (line 8)) (5.23.0)
+Requirement already satisfied: qtconsole in ./.pythonlibs/lib/python3.10/site-packages (from jupyter==1.0.0->-r notebooks/requirements.txt (line 1)) (5.6.1)
+Requirement already satisfied: jupyter-console in ./.pythonlibs/lib/python3.10/site-packages (from jupyter==1.0.0->-r notebooks/requirements.txt (line 1)) (6.6.3)
+Requirement already satisfied: nbconvert in ./.pythonlibs/lib/python3.10/site-packages (from jupyter==1.0.0->-r notebooks/requirements.txt (line 1)) (7.16.5)
+Requirement already satisfied: ipywidgets in ./.pythonlibs/lib/python3.10/site-packages (from jupyter==1.0.0->-r notebooks/requirements.txt (line 1)) (8.1.5)
+Requirement already satisfied: jinja2 in ./.pythonlibs/lib/python3.10/site-packages (from notebook==6.5.6->-r notebooks/requirements.txt (line 2)) (3.1.4)
+Requirement already satisfied: tornado>=6.1 in ./.pythonlibs/lib/python3.10/site-packages (from notebook==6.5.6->-r notebooks/requirements.txt (line 2)) (6.4.2)
+Requirement already satisfied: pyzmq<25,>=17 in ./.pythonlibs/lib/python3.10/site-packages (from notebook==6.5.6->-r notebooks/requirements.txt (line 2)) (24.0.1)
+Requirement already satisfied: argon2-cffi in ./.pythonlibs/lib/python3.10/site-packages (from notebook==6.5.6->-r notebooks/requirements.txt (line 2)) (23.1.0)
+Requirement already satisfied: traitlets>=4.2.1 in ./.pythonlibs/lib/python3.10/site-packages (from notebook==6.5.6->-r notebooks/requirements.txt (line 2)) (5.14.3)
+Requirement already satisfied: jupyter-core>=4.6.1 in ./.pythonlibs/lib/python3.10/site-packages (from notebook==6.5.6->-r notebooks/requirements.txt (line 2)) (5.7.2)
+Requirement already satisfied: jupyter-client<8,>=5.3.4 in ./.pythonlibs/lib/python3.10/site-packages (from notebook==6.5.6->-r notebooks/requirements.txt (line 2)) (7.4.9)
+Requirement already satisfied: ipython-genutils in ./.pythonlibs/lib/python3.10/site-packages (from notebook==6.5.6->-r notebooks/requirements.txt (line 2)) (0.2.0)
+Requirement already satisfied: nbformat in ./.pythonlibs/lib/python3.10/site-packages (from notebook==6.5.6->-r notebooks/requirements.txt (line 2)) (5.10.4)
+Requirement already satisfied: nest-asyncio>=1.5 in ./.pythonlibs/lib/python3.10/site-packages (from notebook==6.5.6->-r notebooks/requirements.txt (line 2)) (1.6.0)
+Requirement already satisfied: Send2Trash>=1.8.0 in ./.pythonlibs/lib/python3.10/site-packages (from notebook==6.5.6->-r notebooks/requirements.txt (line 2)) (1.8.3)
+Requirement already satisfied: terminado>=0.8.3 in ./.pythonlibs/lib/python3.10/site-packages (from notebook==6.5.6->-r notebooks/requirements.txt (line 2)) (0.18.1)
+Requirement already satisfied: prometheus-client in ./.pythonlibs/lib/python3.10/site-packages (from notebook==6.5.6->-r notebooks/requirements.txt (line 2)) (0.21.1)
+Requirement already satisfied: nbclassic>=0.4.7 in ./.pythonlibs/lib/python3.10/site-packages (from notebook==6.5.6->-r notebooks/requirements.txt (line 2)) (1.1.0)
+Requirement already satisfied: ipython in ./.pythonlibs/lib/python3.10/site-packages (from jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (8.31.0)
+Requirement already satisfied: packaging in ./.pythonlibs/lib/python3.10/site-packages (from jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (24.1)
+Requirement already satisfied: jupyterlab-server~=2.19 in ./.pythonlibs/lib/python3.10/site-packages (from jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (2.27.3)
+Requirement already satisfied: jupyter-ydoc~=0.2.3 in ./.pythonlibs/lib/python3.10/site-packages (from jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (0.2.5)
+Requirement already satisfied: jupyter-server-ydoc~=0.8.0 in ./.pythonlibs/lib/python3.10/site-packages (from jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (0.8.0)
+Requirement already satisfied: tomli in ./.pythonlibs/lib/python3.10/site-packages (from jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (2.2.1)
+Requirement already satisfied: anyio<4,>=3.1.0 in ./.pythonlibs/lib/python3.10/site-packages (from jupyter-server==1.24.0->-r notebooks/requirements.txt (line 4)) (3.7.1)
+Requirement already satisfied: websocket-client in ./.pythonlibs/lib/python3.10/site-packages (from jupyter-server==1.24.0->-r notebooks/requirements.txt (line 4)) (1.8.0)
+Requirement already satisfied: comm>=0.1.1 in ./.pythonlibs/lib/python3.10/site-packages (from ipykernel->-r notebooks/requirements.txt (line 5)) (0.2.2)
+Requirement already satisfied: debugpy>=1.6.5 in ./.pythonlibs/lib/python3.10/site-packages (from ipykernel->-r notebooks/requirements.txt (line 5)) (1.8.11)
+Requirement already satisfied: matplotlib-inline>=0.1 in ./.pythonlibs/lib/python3.10/site-packages (from ipykernel->-r notebooks/requirements.txt (line 5)) (0.1.7)
+Requirement already satisfied: psutil in ./.pythonlibs/lib/python3.10/site-packages (from ipykernel->-r notebooks/requirements.txt (line 5)) (6.1.1)
+Requirement already satisfied: python-dateutil>=2.8.2 in ./.pythonlibs/lib/python3.10/site-packages (from pandas->-r notebooks/requirements.txt (line 6)) (2.9.0.post0)
+Requirement already satisfied: pytz>=2020.1 in ./.pythonlibs/lib/python3.10/site-packages (from pandas->-r notebooks/requirements.txt (line 6)) (2024.1)
+Requirement already satisfied: tzdata>=2022.7 in ./.pythonlibs/lib/python3.10/site-packages (from pandas->-r notebooks/requirements.txt (line 6)) (2024.1)
+Requirement already satisfied: tenacity>=6.2.0 in ./.pythonlibs/lib/python3.10/site-packages (from plotly->-r notebooks/requirements.txt (line 8)) (9.0.0)
+Requirement already satisfied: idna>=2.8 in ./.pythonlibs/lib/python3.10/site-packages (from anyio<4,>=3.1.0->jupyter-server==1.24.0->-r notebooks/requirements.txt (line 4)) (3.7)
+Requirement already satisfied: sniffio>=1.1 in ./.pythonlibs/lib/python3.10/site-packages (from anyio<4,>=3.1.0->jupyter-server==1.24.0->-r notebooks/requirements.txt (line 4)) (1.3.1)
+Requirement already satisfied: exceptiongroup in ./.pythonlibs/lib/python3.10/site-packages (from anyio<4,>=3.1.0->jupyter-server==1.24.0->-r notebooks/requirements.txt (line 4)) (1.2.2)
+Requirement already satisfied: decorator in ./.pythonlibs/lib/python3.10/site-packages (from ipython->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (5.1.1)
+Requirement already satisfied: jedi>=0.16 in ./.pythonlibs/lib/python3.10/site-packages (from ipython->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (0.19.2)
+Requirement already satisfied: pexpect>4.3 in ./.pythonlibs/lib/python3.10/site-packages (from ipython->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (4.9.0)
+Requirement already satisfied: prompt_toolkit<3.1.0,>=3.0.41 in ./.pythonlibs/lib/python3.10/site-packages (from ipython->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (3.0.48)
+Requirement already satisfied: pygments>=2.4.0 in ./.pythonlibs/lib/python3.10/site-packages (from ipython->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (2.18.0)
+Requirement already satisfied: stack_data in ./.pythonlibs/lib/python3.10/site-packages (from ipython->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (0.6.3)
+Requirement already satisfied: typing_extensions>=4.6 in ./.pythonlibs/lib/python3.10/site-packages (from ipython->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (4.12.2)
+Requirement already satisfied: MarkupSafe>=2.0 in ./.pythonlibs/lib/python3.10/site-packages (from jinja2->notebook==6.5.6->-r notebooks/requirements.txt (line 2)) (2.1.5)
+Requirement already satisfied: entrypoints in ./.pythonlibs/lib/python3.10/site-packages (from jupyter-client<8,>=5.3.4->notebook==6.5.6->-r notebooks/requirements.txt (line 2)) (0.4)
+Requirement already satisfied: platformdirs>=2.5 in ./.pythonlibs/lib/python3.10/site-packages (from jupyter-core>=4.6.1->notebook==6.5.6->-r notebooks/requirements.txt (line 2)) (4.3.6)
+Requirement already satisfied: jupyter-server-fileid<1,>=0.6.0 in ./.pythonlibs/lib/python3.10/site-packages (from jupyter-server-ydoc~=0.8.0->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (0.9.3)
+Requirement already satisfied: ypy-websocket<0.9.0,>=0.8.2 in ./.pythonlibs/lib/python3.10/site-packages (from jupyter-server-ydoc~=0.8.0->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (0.8.4)
+Requirement already satisfied: y-py<0.7.0,>=0.6.0 in ./.pythonlibs/lib/python3.10/site-packages (from jupyter-ydoc~=0.2.3->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (0.6.2)
+Requirement already satisfied: babel>=2.10 in ./.pythonlibs/lib/python3.10/site-packages (from jupyterlab-server~=2.19->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (2.16.0)
+Requirement already satisfied: json5>=0.9.0 in ./.pythonlibs/lib/python3.10/site-packages (from jupyterlab-server~=2.19->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (0.10.0)
+Requirement already satisfied: jsonschema>=4.18.0 in ./.pythonlibs/lib/python3.10/site-packages (from jupyterlab-server~=2.19->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (4.23.0)
+Requirement already satisfied: requests>=2.31 in ./.pythonlibs/lib/python3.10/site-packages (from jupyterlab-server~=2.19->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (2.32.3)
+Requirement already satisfied: notebook-shim>=0.2.3 in ./.pythonlibs/lib/python3.10/site-packages (from nbclassic>=0.4.7->notebook==6.5.6->-r notebooks/requirements.txt (line 2)) (0.2.4)
+Requirement already satisfied: beautifulsoup4 in ./.pythonlibs/lib/python3.10/site-packages (from nbconvert->jupyter==1.0.0->-r notebooks/requirements.txt (line 1)) (4.12.3)
+Requirement already satisfied: bleach!=5.0.0 in ./.pythonlibs/lib/python3.10/site-packages (from bleach[css]!=5.0.0->nbconvert->jupyter==1.0.0->-r notebooks/requirements.txt (line 1)) (6.2.0)
+Requirement already satisfied: defusedxml in ./.pythonlibs/lib/python3.10/site-packages (from nbconvert->jupyter==1.0.0->-r notebooks/requirements.txt (line 1)) (0.7.1)
+Requirement already satisfied: jupyterlab-pygments in ./.pythonlibs/lib/python3.10/site-packages (from nbconvert->jupyter==1.0.0->-r notebooks/requirements.txt (line 1)) (0.3.0)
+Requirement already satisfied: mistune<4,>=2.0.3 in ./.pythonlibs/lib/python3.10/site-packages (from nbconvert->jupyter==1.0.0->-r notebooks/requirements.txt (line 1)) (3.1.0)
+Requirement already satisfied: nbclient>=0.5.0 in ./.pythonlibs/lib/python3.10/site-packages (from nbconvert->jupyter==1.0.0->-r notebooks/requirements.txt (line 1)) (0.10.2)
+Requirement already satisfied: pandocfilters>=1.4.1 in ./.pythonlibs/lib/python3.10/site-packages (from nbconvert->jupyter==1.0.0->-r notebooks/requirements.txt (line 1)) (1.5.1)
+Requirement already satisfied: fastjsonschema>=2.15 in ./.pythonlibs/lib/python3.10/site-packages (from nbformat->notebook==6.5.6->-r notebooks/requirements.txt (line 2)) (2.21.1)
+Requirement already satisfied: six>=1.5 in ./.pythonlibs/lib/python3.10/site-packages (from python-dateutil>=2.8.2->pandas->-r notebooks/requirements.txt (line 6)) (1.16.0)
+Requirement already satisfied: ptyprocess in ./.pythonlibs/lib/python3.10/site-packages (from terminado>=0.8.3->notebook==6.5.6->-r notebooks/requirements.txt (line 2)) (0.7.0)
+Requirement already satisfied: argon2-cffi-bindings in ./.pythonlibs/lib/python3.10/site-packages (from argon2-cffi->notebook==6.5.6->-r notebooks/requirements.txt (line 2)) (21.2.0)
+Requirement already satisfied: widgetsnbextension~=4.0.12 in ./.pythonlibs/lib/python3.10/site-packages (from ipywidgets->jupyter==1.0.0->-r notebooks/requirements.txt (line 1)) (4.0.13)
+Requirement already satisfied: jupyterlab-widgets~=3.0.12 in ./.pythonlibs/lib/python3.10/site-packages (from ipywidgets->jupyter==1.0.0->-r notebooks/requirements.txt (line 1)) (3.0.13)
+Requirement already satisfied: qtpy>=2.4.0 in ./.pythonlibs/lib/python3.10/site-packages (from qtconsole->jupyter==1.0.0->-r notebooks/requirements.txt (line 1)) (2.4.2)
+Requirement already satisfied: webencodings in ./.pythonlibs/lib/python3.10/site-packages (from bleach!=5.0.0->bleach[css]!=5.0.0->nbconvert->jupyter==1.0.0->-r notebooks/requirements.txt (line 1)) (0.5.1)
+Requirement already satisfied: tinycss2<1.5,>=1.1.0 in ./.pythonlibs/lib/python3.10/site-packages (from bleach[css]!=5.0.0->nbconvert->jupyter==1.0.0->-r notebooks/requirements.txt (line 1)) (1.4.0)
+Requirement already satisfied: parso<0.9.0,>=0.8.4 in ./.pythonlibs/lib/python3.10/site-packages (from jedi>=0.16->ipython->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (0.8.4)
+Requirement already satisfied: attrs>=22.2.0 in ./.pythonlibs/lib/python3.10/site-packages (from jsonschema>=4.18.0->jupyterlab-server~=2.19->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (24.2.0)
+Requirement already satisfied: jsonschema-specifications>=2023.03.6 in ./.pythonlibs/lib/python3.10/site-packages (from jsonschema>=4.18.0->jupyterlab-server~=2.19->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (2024.10.1)
+Requirement already satisfied: referencing>=0.28.4 in ./.pythonlibs/lib/python3.10/site-packages (from jsonschema>=4.18.0->jupyterlab-server~=2.19->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (0.35.1)
+Requirement already satisfied: rpds-py>=0.7.1 in ./.pythonlibs/lib/python3.10/site-packages (from jsonschema>=4.18.0->jupyterlab-server~=2.19->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (0.22.3)
+Requirement already satisfied: jupyter-events>=0.5.0 in ./.pythonlibs/lib/python3.10/site-packages (from jupyter-server-fileid<1,>=0.6.0->jupyter-server-ydoc~=0.8.0->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (0.11.0)
+Requirement already satisfied: wcwidth in ./.pythonlibs/lib/python3.10/site-packages (from prompt_toolkit<3.1.0,>=3.0.41->ipython->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (0.2.13)
+Requirement already satisfied: charset-normalizer<4,>=2 in ./.pythonlibs/lib/python3.10/site-packages (from requests>=2.31->jupyterlab-server~=2.19->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (3.3.2)
+Requirement already satisfied: urllib3<3,>=1.21.1 in ./.pythonlibs/lib/python3.10/site-packages (from requests>=2.31->jupyterlab-server~=2.19->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (2.2.2)
+Requirement already satisfied: certifi>=2017.4.17 in ./.pythonlibs/lib/python3.10/site-packages (from requests>=2.31->jupyterlab-server~=2.19->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (2024.6.2)
+Requirement already satisfied: aiofiles<23,>=22.1.0 in ./.pythonlibs/lib/python3.10/site-packages (from ypy-websocket<0.9.0,>=0.8.2->jupyter-server-ydoc~=0.8.0->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (22.1.0)
+Requirement already satisfied: aiosqlite<1,>=0.17.0 in ./.pythonlibs/lib/python3.10/site-packages (from ypy-websocket<0.9.0,>=0.8.2->jupyter-server-ydoc~=0.8.0->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (0.20.0)
+Requirement already satisfied: cffi>=1.0.1 in ./.pythonlibs/lib/python3.10/site-packages (from argon2-cffi-bindings->argon2-cffi->notebook==6.5.6->-r notebooks/requirements.txt (line 2)) (1.17.1)
+Requirement already satisfied: soupsieve>1.2 in ./.pythonlibs/lib/python3.10/site-packages (from beautifulsoup4->nbconvert->jupyter==1.0.0->-r notebooks/requirements.txt (line 1)) (2.6)
+Requirement already satisfied: executing>=1.2.0 in ./.pythonlibs/lib/python3.10/site-packages (from stack_data->ipython->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (2.1.0)
+Requirement already satisfied: asttokens>=2.1.0 in ./.pythonlibs/lib/python3.10/site-packages (from stack_data->ipython->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (3.0.0)
+Requirement already satisfied: pure-eval in ./.pythonlibs/lib/python3.10/site-packages (from stack_data->ipython->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (0.2.3)
+Requirement already satisfied: pycparser in ./.pythonlibs/lib/python3.10/site-packages (from cffi>=1.0.1->argon2-cffi-bindings->argon2-cffi->notebook==6.5.6->-r notebooks/requirements.txt (line 2)) (2.22)
+Requirement already satisfied: python-json-logger>=2.0.4 in ./.pythonlibs/lib/python3.10/site-packages (from jupyter-events>=0.5.0->jupyter-server-fileid<1,>=0.6.0->jupyter-server-ydoc~=0.8.0->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (3.2.1)
+Requirement already satisfied: pyyaml>=5.3 in ./.pythonlibs/lib/python3.10/site-packages (from jupyter-events>=0.5.0->jupyter-server-fileid<1,>=0.6.0->jupyter-server-ydoc~=0.8.0->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (6.0.2)
+Requirement already satisfied: rfc3339-validator in ./.pythonlibs/lib/python3.10/site-packages (from jupyter-events>=0.5.0->jupyter-server-fileid<1,>=0.6.0->jupyter-server-ydoc~=0.8.0->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (0.1.4)
+Requirement already satisfied: rfc3986-validator>=0.1.1 in ./.pythonlibs/lib/python3.10/site-packages (from jupyter-events>=0.5.0->jupyter-server-fileid<1,>=0.6.0->jupyter-server-ydoc~=0.8.0->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (0.1.1)
+Requirement already satisfied: fqdn in ./.pythonlibs/lib/python3.10/site-packages (from jsonschema[format-nongpl]>=4.18.0->jupyter-events>=0.5.0->jupyter-server-fileid<1,>=0.6.0->jupyter-server-ydoc~=0.8.0->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (1.5.1)
+Requirement already satisfied: isoduration in ./.pythonlibs/lib/python3.10/site-packages (from jsonschema[format-nongpl]>=4.18.0->jupyter-events>=0.5.0->jupyter-server-fileid<1,>=0.6.0->jupyter-server-ydoc~=0.8.0->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (20.11.0)
+Requirement already satisfied: jsonpointer>1.13 in ./.pythonlibs/lib/python3.10/site-packages (from jsonschema[format-nongpl]>=4.18.0->jupyter-events>=0.5.0->jupyter-server-fileid<1,>=0.6.0->jupyter-server-ydoc~=0.8.0->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (3.0.0)
+Requirement already satisfied: uri-template in ./.pythonlibs/lib/python3.10/site-packages (from jsonschema[format-nongpl]>=4.18.0->jupyter-events>=0.5.0->jupyter-server-fileid<1,>=0.6.0->jupyter-server-ydoc~=0.8.0->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (1.3.0)
+Requirement already satisfied: webcolors>=24.6.0 in ./.pythonlibs/lib/python3.10/site-packages (from jsonschema[format-nongpl]>=4.18.0->jupyter-events>=0.5.0->jupyter-server-fileid<1,>=0.6.0->jupyter-server-ydoc~=0.8.0->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (24.11.1)
+Requirement already satisfied: arrow>=0.15.0 in ./.pythonlibs/lib/python3.10/site-packages (from isoduration->jsonschema[format-nongpl]>=4.18.0->jupyter-events>=0.5.0->jupyter-server-fileid<1,>=0.6.0->jupyter-server-ydoc~=0.8.0->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (1.3.0)
+Requirement already satisfied: types-python-dateutil>=2.8.10 in ./.pythonlibs/lib/python3.10/site-packages (from arrow>=0.15.0->isoduration->jsonschema[format-nongpl]>=4.18.0->jupyter-events>=0.5.0->jupyter-server-fileid<1,>=0.6.0->jupyter-server-ydoc~=0.8.0->jupyterlab==3.6.3->-r notebooks/requirements.txt (line 3)) (2.9.0.20241206)
+[I 2025-01-12 17:40:12.051 ServerApp] jupyter_server_fileid | extension was successfully linked.
+[I 2025-01-12 17:40:12.056 ServerApp] jupyter_server_ydoc | extension was successfully linked.
+[I 2025-01-12 17:40:12.062 ServerApp] jupyterlab | extension was successfully linked.
+[I 2025-01-12 17:40:12.066 ServerApp] nbclassic | extension was successfully linked.
+[I 2025-01-12 17:40:12.316 ServerApp] notebook_shim | extension was successfully linked.
+[W 2025-01-12 17:40:12.340 ServerApp] All authentication is disabled.  Anyone who can connect to this server will be able to run code.
+[I 2025-01-12 17:40:12.342 ServerApp] notebook_shim | extension was successfully loaded.
+[I 2025-01-12 17:40:12.343 FileIdExtension] Configured File ID manager: ArbitraryFileIdManager
+[I 2025-01-12 17:40:12.344 FileIdExtension] ArbitraryFileIdManager : Configured root dir: /home/runner/workspace
+[I 2025-01-12 17:40:12.344 FileIdExtension] ArbitraryFileIdManager : Configured database path: /home/runner/workspace/.local/share/jupyter/file_id_manager.db
+[I 2025-01-12 17:40:12.345 FileIdExtension] ArbitraryFileIdManager : Successfully connected to database file.
+[I 2025-01-12 17:40:12.346 FileIdExtension] ArbitraryFileIdManager : Creating File ID tables and indices with journal_mode = DELETE
+[I 2025-01-12 17:40:12.347 ServerApp] jupyter_server_fileid | extension was successfully loaded.
+[I 2025-01-12 17:40:12.348 ServerApp] jupyter_server_ydoc | extension was successfully loaded.
+[I 2025-01-12 17:40:12.350 LabApp] JupyterLab extension loaded from /home/runner/workspace/.pythonlibs/lib/python3.10/site-packages/jupyterlab
+[I 2025-01-12 17:40:12.351 LabApp] JupyterLab application directory is /home/runner/workspace/.pythonlibs/share/jupyter/lab
+[I 2025-01-12 17:40:12.355 ServerApp] jupyterlab | extension was successfully loaded.
+
+  _   _          _      _
+ | | | |_ __  __| |__ _| |_ ___
+ | |_| | '_ \/ _` / _` |  _/ -_)
+  \___/| .__/\__,_\__,_|\__\___|
+       |_|
+                                                                           
+Read the migration plan to Notebook 7 to learn about the new features and the actions to take if you are using extensions.
+
+https://jupyter-notebook.readthedocs.io/en/latest/migrate_to_notebook7.html
+
+Please note that updating to Notebook 7 might break some of your extensions.
+
+[I 2025-01-12 17:40:12.359 ServerApp] nbclassic | extension was successfully loaded.
+[I 2025-01-12 17:40:12.359 ServerApp] The port 8050 is already in use, trying another port.
+[I 2025-01-12 17:40:12.361 ServerApp] Serving notebooks from local directory: /home/runner/workspace
+[I 2025-01-12 17:40:12.362 ServerApp] Jupyter Server 1.24.0 is running at:
+[I 2025-01-12 17:40:12.362 ServerApp] http://c73b04cfc0cf:8051/lab
+[I 2025-01-12 17:40:12.362 ServerApp]  or http://127.0.0.1:8051/lab
+[I 2025-01-12 17:40:12.362 ServerApp] Use Control-C to stop this server and shut down all kernels (twice to skip confirmation).
+[I 2025-01-12 17:40:12.956 ServerApp] 302 GET / (10.81.5.26) 0.52ms
+[W 2025-01-12 17:40:13.337 ServerApp] Content security violation: {"csp-report":{"document-uri":"https://05c81ba6-2216-4f69-a660-fe0b741e5715-00-2o70cv6sggnog.riker.replit.dev/","referrer":"https://replit.com/@logankud/gradient-descent-visualization","violated-directive":"frame-ancestors","effective-directive":"frame-ancestors","original-policy":"frame-ancestors 'self'; report-uri /api/security/csp-report","disposition":"enforce","blocked-uri":"https://05c81ba6-2216-4f69-a660-fe0b741e5715-00-2o70cv6sggnog.riker.replit.dev/","status-code":200,"script-sample":""}}

@@ -11,7 +11,9 @@ run = "python src/dashboard/dashboard.py --host=0.0.0.0 --port=8050"
 deploymentTarget = "cloudrun"
 
 [[ports]]
-localPort = 8050 
+localPort = 8050
 externalPort = 8080
-protocol = "http"
-description = "Dash app"
+
+[[ports]]
+localPort = 8051
+externalPort = 80
