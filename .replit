@@ -18,3 +18,15 @@ externalPort = 8080
 [[ports]]
 localPort = 8051
 externalPort = 80
+
+[workflows]
+runButton = "Run Shopify Orders"
+
+[[workflows.workflow]]
+name = "Run Shopify Orders"
+author = 17731565
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "bash src/shopify_order_details/run.sh"
