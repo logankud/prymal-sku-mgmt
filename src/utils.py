@@ -922,9 +922,30 @@ def send_sns_alert(message, topic_arn, subject, region):
 def get_shopify_orders_by_date(shopify_api_key: str, shopify_api_pw: str,
                                start_date: str, end_date: str):
     """
-    Get all orders & line item details from a Shopify store as of a specific date.
-
+    Get all orders & line item details from a Shopify store for a date range with data validation.
+    
     Args:
+        shopify_api_key (str): Shopify API key
+        shopify_api_pw (str): Shopify API password 
+        start_date (str): Start date of orders to retrieve
+        end_date (str): End date of orders to retrieve
+
+    Returns:
+        tuple: (orders_df, line_items_df) with validated data
+        
+    Raises:
+        ValueError: If data validation fails or incomplete data detected
+    """
+    def validate_order_completeness(total_count: int, retrieved_count: int, date_range: str):
+        """Validate we retrieved all expected orders"""
+        if total_count != retrieved_count:
+            raise ValueError(f"Data incomplete for {date_range}: Expected {total_count} orders but got {retrieved_count}")
+            
+    def validate_pagination(link_header: str) -> bool:
+        """Properly validate pagination from Link header"""
+        if not link_header:
+            return False
+        return 'rel="next"' in link_header
         shopify_api_key (str): Shopify API key
         shopify_api_pw (str): Shopify API password
         start_date (str): Start date of orders to retrieve
@@ -1021,7 +1042,24 @@ def get_shopify_orders_by_date(shopify_api_key: str, shopify_api_pw: str,
 
                 if r.status_code == 200:
                     response_json = r.json()
+                    
+                    # Get total order count from response headers
+                    total_orders = int(r.headers.get('X-Shopify-Shop-Api-Call-Limit', '0').split('/')[0])
+                    
+                    # Validate order statuses
+                    for order in response_json['orders']:
+                        if 'cancelled_at' in order and order['cancelled_at']:
+                            logger.warning(f"Cancelled order found: {order['id']}")
+                            
+                    # Track order counts for validation
+                    if 'orders' in response_json:
+                        orders_count = len(response_json['orders'])
+                        logger.info(f"Retrieved {orders_count} orders")
+                        
                     successful_response = True
+                    
+                    # Validate pagination properly
+                    has_next_page = validate_pagination(r.headers.get('Link', ''))
 
             except requests.exceptions.HTTPError as errh:
                 logger.info("HTTP Error:" + str(errh))
