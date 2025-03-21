@@ -946,10 +946,6 @@ def get_shopify_orders_by_date(shopify_api_key: str, shopify_api_pw: str,
         if not link_header:
             return False
         return 'rel="next"' in link_header
-        shopify_api_key (str): Shopify API key
-        shopify_api_pw (str): Shopify API password
-        start_date (str): Start date of orders to retrieve
-        end_date (str): End date of orders to retrieve
 
     Returns:
         pd.DataFrame: dataframe of one record per order for orders in the date range
