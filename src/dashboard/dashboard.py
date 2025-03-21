@@ -7,7 +7,7 @@ import os
 import numpy as np
 
 sys.path.append('src/')  # updating path back to root for importing modules
-from utils import run_athena_query  # Ensure this import is correct based on your project structure
+from utils import run_athena_query  
 
 # AWS Athena configuration
 REGION = 'us-east-1'  # e.g., 'us-east-1'
