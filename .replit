@@ -1,5 +1,6 @@
 
-run = "python src/dashboard/dashboard.py --host=0.0.0.0 --port=8050"
+# run = "python src/dashboard/dashboard.py --host=0.0.0.0 --port=8050"
+run = "src/shopify_order_details/main.py"
 
 modules = ["python-3.10:v25-20230920-d4ad2e4"]
 
