@@ -118,14 +118,15 @@ def main():
             
             logger.info(f'Processing shopify_orders date: {start_date}')
 
-            # subset dataframe
-            df = shopify_orders_df.loc[shopify_orders_df['order_date'] == start_date].copy()
-           
+            # rename dataframe for validation 
+            df = shopify_orders_df.copy()
+    
             # Validate data w/ Pydantic
             valid_data, invalid_data = validate_dataframe(
                 df, ShopifyOrder)
 
             logger.info(f'Total records in df: {len(df)}')
+            logger.info(f'Total Distinct Order ID: {len(df["order_id"].unique())}')
             logger.info(f'Total records in valid_data: {len(valid_data)}')
             logger.info(f'Total records in invalid_data: {len(invalid_data)}')
 
@@ -175,7 +176,8 @@ def main():
             logger.info(f'Processing shopify_line_items date: {start_date}')
 
             # subset dataframe
-            df = shopify_line_item_df.loc[shopify_line_item_df['order_date'] == start_date].copy()
+            df = shopify_line_item_df.copy()
+            # df = shopify_line_item_df.loc[shopify_line_item_df['order_date'] == start_date].copy()
 
             df.to_csv('line_item_df.csv', index=False)
 

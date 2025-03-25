@@ -370,7 +370,6 @@ def validate_dataframe(
 
     for item in data:
         try:
-            logger.info('test')
             # Attempt to create a model instance
             valid_item = model(**item)
             valid_items.append(valid_item.model_dump())
@@ -487,7 +486,7 @@ def list_all_shipbob_products(api_secret: str):
 
         # Extract page details
         current_page = response.headers['Page-Number']
-
+    
     return product_to_inventory_df.reset_index(drop=True)
 
 
@@ -919,293 +918,157 @@ def send_sns_alert(message, topic_arn, subject, region):
         raise ValueError(f'Error sending SNS alert! {str(e)}')
 
 
-def get_shopify_orders_by_date(shopify_api_key: str, shopify_api_pw: str,
-                               start_date: str, end_date: str):
+def get_shopify_orders_by_date(
+    shopify_api_key: str,
+    shopify_api_pw: str,
+    start_date: str,
+    end_date: str
+):
     """
-    Get all orders & line item details from a Shopify store for a date range with data validation.
-    
-    Args:
-        shopify_api_key (str): Shopify API key
-        shopify_api_pw (str): Shopify API password 
-        start_date (str): Start date of orders to retrieve
-        end_date (str): End date of orders to retrieve
-
-    Returns:
-        tuple: (orders_df, line_items_df) with validated data
-        
-    Raises:
-        ValueError: If data validation fails or incomplete data detected
+    Fetch all Shopify orders and line items for [start_date, end_date],
+    returning (orders_df, line_items_df). Correctly paginates by inserting
+    credentials into each subsequent 'next' link from the Link header.
     """
-    def validate_order_completeness(total_count: int, retrieved_count: int, date_range: str):
-        """Validate we retrieved all expected orders"""
-        if total_count != retrieved_count:
-            raise ValueError(f"Data incomplete for {date_range}: Expected {total_count} orders but got {retrieved_count}")
-            
-    def validate_pagination(link_header: str) -> bool:
-        """Properly validate pagination from Link header"""
-        if not link_header:
-            return False
-        return 'rel="next"' in link_header
+    import requests
+    import pandas as pd
+    import time
+    from loguru import logger
+    from urllib.parse import urlsplit, urlunsplit
 
-    Returns:
-        pd.DataFrame: dataframe of one record per order for orders in the date range
-        pd.DataFrame: dataframe of one record per line item for all orders
+    # Convert inputs to datetimes and build the min/max for the API query (UTC here)
+    start_dt = pd.to_datetime(start_date)
+    end_dt   = pd.to_datetime(end_date)
 
-    """
+    created_at_min = start_dt.strftime('%Y-%m-%dT00:00:00Z')
+    created_at_max = end_dt.strftime('%Y-%m-%dT23:59:59Z')
 
-    # from datetime import datetime, timedelta
+    # Base URL with credentials for page 1
+    base_url = f"https://{shopify_api_key}:{shopify_api_pw}@prymal-coffee-creamer.myshopify.com"
+    endpoint = "/admin/api/2021-07/orders.json"
 
-    # Set dates to pull data for
-    sdate = pd.to_datetime(start_date)
-    edate = pd.to_datetime(end_date)
-
-    # Format API and pull all data from desired date range:
-
-    # Set timezone - Pacific for shopify data
-    pacific = timezone('US/Pacific')
-
-    # extract year, month and date from user input
-    y_start = edate.strftime('%Y')
-    m_start = edate.strftime('%m')
-    d_start = edate.strftime('%d')
-
-    # Set the start_date (which is the most current date of data we want)
-    start_date = pacific.localize(
-        datetime.datetime(int(y_start), int(m_start), int(d_start), 23, 59,
-                          59))  # datetime.date(%Y,%m,%d,%H,%M,%S)
-
-    # extract year, month and date from user input
-    y_end = sdate.strftime('%Y')
-    m_end = sdate.strftime('%m')
-    d_end = sdate.strftime('%d')
-
-    # Set the end_date (which is the oldest date of data we want, where the loop will terminate)
-    end_date = pacific.localize(
-        datetime.datetime(int(y_end), int(m_end), int(d_end), 0, 0,
-                          0))  # datetime.date(%Y,%m,%d,%H,%M,%S)
-
-    logger.info(f'backfill start date: {start_date}')
-    logger.info(f'backfill end date: {end_date}')
-    logger.info('shopify api data being pulled from: ', sdate, ' through ',
-                edate)
-
-    # Create temp lists to hold the values in the json file
-    line_items = []
-    prices = []
-    order_id = []
-    created_at = []
-    email = []
-    subtotal_price = []
-    total_tax = []
-    total_discounts = []
-    financial_status = []
-    line_item_qty = []
-    shipping_fees = []
-
-    # Set paramaters for GET request
-    payload = {
+    # Initial query params
+    params = {
+        'status': 'any',
         'limit': 250,
-        'created_at_max': start_date,
-        'created_at_min': end_date,
-        'financial_status': 'paid'
+        'created_at_min': created_at_min,
+        'created_at_max': created_at_max
     }
 
-    # Blank df to store line item details
-    shopify_line_item_df = pd.DataFrame()
-    shopify_orders_df = pd.DataFrame()
+    # Start with the first URL
+    url = base_url + endpoint
 
-    # Shopify API URL and endpoint
-    url = f'https://{shopify_api_key}:{shopify_api_pw}@prymal-coffee-creamer.myshopify.com/admin/api/2021-07/orders.json?status=any'
+    # Lists to accumulate all records
+    all_orders = []
+    all_line_items = []
 
-    has_next_page = True
-    successful_response = False
-    max_retries = 3
+    while True:
+        logger.info(f"Fetching: {url} with params={params}")
+        response = requests.get(url, params=params)
 
-    while has_next_page == True:
+        # Raise an exception if the response was not successful
+        response.raise_for_status()
 
+        data_json = response.json()
+        orders = data_json.get('orders', [])
+        logger.info(f"Fetched {len(orders)} orders on this page.")
+
+        # If no orders returned, we are done
+        if not orders:
+            break
+
+        # Build out the orders and line items records
+        for order in orders:
+            order_id   = order.get('order_number')
+            created_at = order.get('created_at')
+            email      = order.get('email')
+
+            # Convert created_at to YYYY-MM-DD
+            order_date = pd.to_datetime(created_at).strftime('%Y-%m-%d') if created_at else None
+
+            # Parse shipping details
+            shipping_info = {} if order.get('shipping_address',{}) == None else order.get('shipping_address',{})
+            
+            shipping_address = shipping_info.get('address1', None) 
+            shipping_city = shipping_info.get('city',None)
+            shipping_province = shipping_info.get('province',None)
+            shipping_country = shipping_info.get('country',None)
+
+            # Build an order record
+            all_orders.append({
+                'order_id': order_id,
+                'email': email,
+                'created_at': created_at,
+                'order_date': order_date,
+                'subtotal_price': order.get('subtotal_price'),
+                'total_line_items_price': order.get('total_line_items_price'),
+                'total_tax': order.get('total_tax'),
+                'total_discounts': order.get('total_discounts'),
+                'total_shipping_fee': order.get('total_shipping_price_set', {}).get('shop_money', {}).get('amount'),
+                'total_price': order.get('total_price'),
+                'shipping_address': shipping_address,
+                'shipping_city': shipping_city,
+                'shipping_province': shipping_province,
+                'shipping_country': shipping_country
+            })
+
+
+            # Collect line items for each order
+            for line_item in order.get('line_items', []):
+                line_items_record = {
+                    'order_id': order_id,
+                    'email': email,
+                    'created_at': created_at,
+                    'order_date': order_date,
+                    'price': line_item.get('price'),
+                    'quantity': line_item.get('quantity'),
+                    'sku': line_item.get('sku'),
+                    'title': line_item.get('title'),
+                    'variant_title': line_item.get('variant_title'),
+                    'line_item_name': line_item.get('name')
+                }
+                all_line_items.append(line_items_record)
+
+        # Pagination: check the 'Link' header for rel="next"
+        link_header = response.headers.get('Link', '')
+        if 'rel="next"' not in link_header:
+            # No next page, break the loop
+            logger.info("No next page found; pagination complete.")
+            break
+
+        # Otherwise, parse next page URL from link_header
+        next_url = None
+        for part in link_header.split(','):
+            if 'rel="next"' in part:
+                start = part.find('<') + 1
+                end = part.find('>')
+                next_url = part[start:end]
+                break
+
+        if not next_url:
+            logger.info("Next page URL not found; stopping pagination.")
+            break
+
+        # Inject credentials for the next page:
+        # e.g. https://prymal-coffee-creamer.myshopify.com -> https://USER:PASS@prymal-coffee-creamer.myshopify.com
+        parsed = urlsplit(next_url)
+        # url w/ creds
+        url_with_creds = f"{shopify_api_key}:{shopify_api_pw}@{parsed.hostname}"
+
+        # Rebuild the next_url with embedded credentials
+        next_url = urlunsplit((parsed.scheme, url_with_creds, parsed.path, parsed.query, parsed.fragment))
+
+        url = next_url
+        # Clear params because next_url includes them already
+        params = {}
+
+        # Optional sleep to avoid rate limits
         time.sleep(1)
 
-        for retry in range(max_retries):
+    # Convert accumulated records to DataFrames
+    orders_df = pd.DataFrame(all_orders)
+    line_items_df = pd.DataFrame(all_line_items)
 
-            try:
+    logger.info(f"Total orders retrieved: {len(orders_df)}")
+    logger.info(f"Total line items retrieved: {len(line_items_df)}")
 
-                logger.info(f'URL: {url}')
-
-                r = requests.get(url, stream=True, params=payload)
-
-                logger.info(f'Response: {r.status_code}')
-                r.raise_for_status()  # Check for any HTTP errors
-
-                if r.status_code == 200:
-                    response_json = r.json()
-                    
-                    # Get total order count from response headers
-                    total_orders = int(r.headers.get('X-Shopify-Shop-Api-Call-Limit', '0').split('/')[0])
-                    
-                    # Validate order statuses
-                    for order in response_json['orders']:
-                        if 'cancelled_at' in order and order['cancelled_at']:
-                            logger.warning(f"Cancelled order found: {order['id']}")
-                            
-                    # Track order counts for validation
-                    if 'orders' in response_json:
-                        orders_count = len(response_json['orders'])
-                        logger.info(f"Retrieved {orders_count} orders")
-                        
-                    successful_response = True
-                    
-                    # Validate pagination properly
-                    has_next_page = validate_pagination(r.headers.get('Link', ''))
-
-            except requests.exceptions.HTTPError as errh:
-                logger.info("HTTP Error:" + str(errh))
-                time.sleep(30)
-                continue
-
-            except requests.exceptions.ConnectionError as errc:
-                logger.info("Error Connecting:" + str(errc))
-                time.sleep(30)
-                continue
-
-            except requests.exceptions.Timeout as errt:
-                logger.info("Timeout Error:" + str(errt))
-                time.sleep(30)
-                continue
-
-            except requests.exceptions.RequestException as err:
-                logger.info("Error:" + str(err))
-                time.sleep(30)
-                continue
-
-            if retry < max_retries - 1:
-                logger.info('Retrying api call...')
-            else:
-                logger.info(
-                    f'Retried {max_retries} times without getting a 200 response.'
-                )
-
-            logger.info(f'Successful response: {successful_response}')
-
-            if successful_response == True:
-
-                # --------------------------- ORDER DF ----------------------------
-
-                # Normalize Shopify Orders
-                orders = pd.json_normalize(response_json['orders'])
-
-                # if there are orders, process them
-                if len(orders) == 0:
-                    logger.info(f'{len(orders)} orders')
-                    return shopify_orders_df, shopify_line_item_df
-
-                elif len(orders) > 0:
-
-                    logger.info(f'{len(orders)} orders')
-
-                    # Select relevant columns
-                    orders_df = orders[[
-                        'order_number', 'email', 'created_at',
-                        'shipping_address.address1', 'shipping_address.city',
-                        'shipping_address.province',
-                        'shipping_address.country', 'subtotal_price',
-                        'total_line_items_price', 'total_tax',
-                        'total_discounts',
-                        'total_shipping_price_set.shop_money.amount',
-                        'total_price'
-                    ]].copy()
-                    # Rename columns
-                    orders_df.columns = [
-                        'order_id', 'email', 'created_at', 'shipping_address',
-                        'shipping_city', 'shipping_province',
-                        'shipping_country', 'subtotal_price',
-                        'total_line_items_price', 'total_tax',
-                        'total_discounts', 'total_shipping_fee', 'total_price'
-                    ]
-
-                    logger.info(
-                        f"Min order date: {orders_df['created_at'].min()}")
-
-                    # Use created_at to create a formatted date column (yyyy-mm-dd)
-                    orders_df['order_date'] = pd.to_datetime(
-                        orders_df['created_at'].str.slice(0, 19),
-                        format='%Y-%m-%dT%H:%M:%S').dt.strftime('%Y-%m-%d')
-
-                    shopify_orders_df = pd.concat(
-                        [shopify_orders_df, orders_df])
-
-                    # --------------------------- LINE ITEM DF ----------------------------
-
-                    # Iterate through orders_df and normalize line_items_df
-                    for i in range(len(response_json['orders'])):
-
-                        line_items = pd.json_normalize(
-                            response_json['orders'][i]['line_items'])
-
-                        line_items = line_items[[
-                            'name', 'price', 'quantity', 'sku', 'title',
-                            'variant_title'
-                        ]].copy()
-
-                        line_items['order_id'] = orders.iloc[i]['order_number']
-                        line_items['email'] = orders.iloc[i]['email']
-                        line_items['created_at'] = orders.iloc[i]['created_at']
-
-                        line_items['order_date'] = pd.to_datetime(
-                            line_items['created_at'].str.slice(0, 19),
-                            format='%Y-%m-%dT%H:%M:%S').dt.strftime('%Y-%m-%d')
-
-                        line_items.columns = [
-                            'line_item_name', 'price', 'quantity', 'sku',
-                            'title', 'variant_title', 'order_id', 'email',
-                            'created_at', 'order_date'
-                        ]
-                        line_items = line_items[[
-                            'order_id', 'email', 'created_at', 'order_date',
-                            'price', 'quantity', 'sku', 'title',
-                            'variant_title', 'line_item_name'
-                        ]].copy()
-
-                        line_items.reset_index(inplace=True, drop=True)
-
-                        shopify_line_item_df = pd.concat(
-                            [shopify_line_item_df, line_items])
-
-                        # ----------- Paginate ---------------
-
-                        # Paginate results if there are more than 250 orders
-                        if 'link' in r.headers and 'rel="next"' in r.headers[
-                                'link']:
-
-                            if len(r.headers['link'].split(',')) > 1:
-                                next_link = r.headers['link'].split(
-                                    ',')[1].split('>')[0].replace('<', '')
-                                url = f'{next_link.split("//")[0]}' + f'//{shopify_api_key}:' + f'{shopify_api_pw}' + '@' + f'{next_link.split("//")[1]}'
-
-                            else:
-                                next_link = r.headers['link'].split(
-                                    '>')[0].replace('<', '')
-                                url = f'{next_link.split("//")[0]}' + f'//{shopify_api_key}:' + f'{shopify_api_pw}' + '@' + f'{next_link.split("//")[1]}'
-
-                        else:
-                            has_next_page = False
-
-                        #Reset Payload
-                        payload = {'limit': 250}
-
-                        logger.info(orders_df['order_date'].min(),
-                                    orders_df['order_date'].max())
-                        logger.info(f'Has next page: {has_next_page}')
-                        logger.info(f'Total orders: {len(shopify_orders_df)}')
-                        logger.info(
-                            f'Orders date range: {shopify_orders_df["order_date"].min()} to {shopify_orders_df["order_date"].max()}'
-                        )
-                        logger.info(
-                            f'Total line items: {len(shopify_line_item_df)}')
-                        logger.info(
-                            f'Line items date range: {shopify_line_item_df["order_date"].min()} to {shopify_line_item_df["order_date"].max()}'
-                        )
-
-                    shopify_line_item_df.reset_index(inplace=True, drop=True)
-                    shopify_orders_df.reset_index(inplace=True, drop=True)
-
-                    return shopify_orders_df, shopify_line_item_df
+    return orders_df, line_items_df
