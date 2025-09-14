@@ -138,8 +138,6 @@ def main():
 
             if len(valid_data) > 0:
 
-                logger.info(pd.DataFrame(valid_data).head())
-
                 # define path to write to
                 year = pd.to_datetime(start_date).strftime('%Y')
                 month = pd.to_datetime(start_date).strftime('%m')
@@ -179,6 +177,7 @@ def main():
             df = shopify_line_item_df.copy()
             # df = shopify_line_item_df.loc[shopify_line_item_df['order_date'] == start_date].copy()
 
+            
             df.to_csv('line_item_df.csv', index=False)
 
             # Validate data w/ Pydantic

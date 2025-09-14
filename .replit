@@ -30,3 +30,6 @@ mode = "sequential"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "bash src/shopify_order_details/run.sh"
+
+[agent]
+expertMode = true

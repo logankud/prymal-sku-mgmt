@@ -138,11 +138,10 @@ def main():
 
             if len(valid_data) > 0:
 
-                logger.info(valid_data)
-                logger.info(pd.DataFrame(valid_data))
-
                 # define path to write to
                 s3_prefix = f"shipbob/order_details/order_date={start_date}/shipbob_order_details_{start_date.replace('-','_')}.csv"
+
+                logger.info(f"Total nutella records: {df.loc[df['inventory_id']==14423625,'inventory_qty'].sum()}")
 
                 try:
                     # Write to s3
