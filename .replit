@@ -1,15 +1,19 @@
 
 # run = "python src/dashboard/dashboard.py --host=0.0.0.0 --port=8050"
 run = "src/shopify_order_details/main.py"
-
-modules = ["python-3.10:v25-20230920-d4ad2e4"]
+modules = ["python-3.11", "postgresql-16"]
 
 [nix]
 channel = "stable-23_11"
+packages = ["cacert", "cargo", "glibcLocales", "libiconv", "libxcrypt", "rustc"]
 
 [deployment]
 run = "python src/dashboard/dashboard.py --host=0.0.0.0 --port=8050"
 deploymentTarget = "cloudrun"
+
+[[ports]]
+localPort = 5000
+externalPort = 80
 
 [[ports]]
 localPort = 8050
@@ -19,8 +23,12 @@ externalPort = 8080
 localPort = 8051
 externalPort = 80
 
+[[ports]]
+localPort = 44219
+externalPort = 3000
+
 [workflows]
-runButton = "Run Shopify Orders"
+runButton = "Project"
 
 [[workflows.workflow]]
 name = "Run Shopify Orders"
@@ -30,6 +38,27 @@ mode = "sequential"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "bash src/shopify_order_details/run.sh"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "ShipBob Tracker"
+
+[[workflows.workflow]]
+name = "ShipBob Tracker"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "streamlit run app.py --server.port=5000 --server.address=0.0.0.0 --server.headless=true"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
 
 [agent]
 expertMode = true
