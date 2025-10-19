@@ -11,31 +11,50 @@ from utils import run_athena_query_no_results
 
 run_date = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
 
+# -----------------------------------------------
+# Create staging table
+
+# Read staging query
+with open("create_staging.sql") as f:
+  QUERY = f.read().replace("${RUN_DATE}", run_date)
+
+run_athena_query_no_results(bucket=os.getenv("S3_BUCKET_NAME"),
+                            query=QUERY,
+                            database=os.getenv("GLUE_DATABASE_NAME"),
+                            region='us-east-1')
 
 # -----------------------------------------------
-# STAGE data for loading into final table
+# Drop partition if exists in the final table
 
-# print wd
-print(os.getcwd())
+# Read insert query
+with open("drop_partition_final.sql") as f:
+  QUERY = f.read().replace("${RUN_DATE}", run_date)
 
-# # Read staging query
-# with open("stage.sql") as f:
-#     QUERY = f.read().replace("${RUN_DATE}", run_date)
+run_athena_query_no_results(bucket=os.getenv("S3_BUCKET_NAME"),
+                            query=QUERY,
+                            database=os.getenv("GLUE_DATABASE_NAME"),
+                            region='us-east-1')
 
-# run_athena_query_no_results(bucket=os.getenv("S3_BUCKET_NAME"), 
-#                             query=QUERY, 
-#                             database=os.getenv("GLUE_DATABASE_NAME"),
-#                             region='us-east-1')
+# -----------------------------------------------
+# Add partition to the final table (pointing to the staging table)
 
+# Read insert query
+with open("add_partition_final.sql") as f:
+  QUERY = f.read().replace("${RUN_DATE}", run_date)
 
-# # -----------------------------------------------
-# # LOAD data from staging -> final table
+run_athena_query_no_results(bucket=os.getenv("S3_BUCKET_NAME"),
+                            query=QUERY,
+                            database=os.getenv("GLUE_DATABASE_NAME"),
+                            region='us-east-1')
 
-# # Read insert query
-# with open("load.sql") as f:
-#     QUERY = f.read().replace("${RUN_DATE}", run_date)
+# -----------------------------------------------
+# Drop staging table
 
-# run_athena_query_no_results(bucket=os.getenv("S3_BUCKET_NAME"), 
-#                             query=QUERY, 
-#                             database=os.getenv("GLUE_DATABASE_NAME"),
-#                             region='us-east-1')
+# Read insert query
+with open("drop_table_staging.sql") as f:
+  QUERY = f.read().replace("${RUN_DATE}", run_date)
+
+run_athena_query_no_results(bucket=os.getenv("S3_BUCKET_NAME"),
+                            query=QUERY,
+                            database=os.getenv("GLUE_DATABASE_NAME"),
+                            region='us-east-1')
