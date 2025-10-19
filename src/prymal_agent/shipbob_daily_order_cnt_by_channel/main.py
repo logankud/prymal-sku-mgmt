@@ -2,7 +2,10 @@ from datetime import date, timedelta
 import os
 import sys
 
-sys.path.append('src/')  # updating path back to root for importing root-level modules
+# Add the src/ directory to path using absolute path
+script_dir = os.path.dirname(os.path.abspath(__file__))
+workspace_root = os.path.dirname(os.path.dirname(os.path.dirname(script_dir)))
+sys.path.append(os.path.join(workspace_root, 'src'))
 
 from utils import run_athena_query_no_results
 
