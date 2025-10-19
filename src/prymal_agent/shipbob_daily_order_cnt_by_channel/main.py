@@ -1,6 +1,10 @@
 from datetime import date, timedelta
-from utils import run_athena_query_no_results
 import os
+import sys
+
+sys.path.append('src/')  # updating path back to root for importing modules
+
+from utils import run_athena_query_no_results
 
 run_date = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
 
