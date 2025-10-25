@@ -9,7 +9,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 workspace_root = os.path.dirname(os.path.dirname(os.path.dirname(script_dir)))
 sys.path.append(os.path.join(workspace_root, 'src'))
 
-from utils import run_athena_query_no_results
+from utils import run_athena_query_no_results, delete_s3_data
 
 current_ts = datetime.now()
 run_date = (current_ts).strftime("%Y-%m-%d")
@@ -35,12 +35,14 @@ run_athena_query_no_results(bucket=os.getenv("S3_BUCKET_NAME"),
 # -----------------------------------------------
 # Create staging table
 
+# Delete s3 data before creating staging table
+staging_prefix = f'staging/prymal_agent/shipbob/retention_by_cohort/report_date=${run_date}/'
+
+delete_s3_data(bucket=os.getenv("S3_BUCKET"), prefix=staging_prefix)
+
 # Read staging query
 with open("create_staging.sql") as f:
-  QUERY = f.read().replace("${RUN_DATE}", run_date).replace(
-      "${S3_BUCKET}",
-      os.getenv("S3_BUCKET_NAME")).replace("${RUN_ID}",
-                                           current_ts.strftime("%Y%m%d%H%M%S"))
+  QUERY = f.read().replace("${STAGING_LOCATION}", f's3://${os.getenv("S3_BUCKET")}/{staging_table_location}')
 
 logger.info('Creating staging table')
 

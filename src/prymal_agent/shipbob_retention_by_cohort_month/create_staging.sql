@@ -2,7 +2,7 @@ CREATE TABLE prymal_agent.tmp_shipbob_retention_by_cohort_stage
 WITH (
   format = 'PARQUET',
   parquet_compression = 'GZIP',
-  external_location = 's3://${S3_BUCKET}/staging/prymal_agent/shipbob/retention_by_cohort/report_date=${RUN_DATE}/'
+  external_location = '${STAGING_LOCATION'
   
 ) AS
 

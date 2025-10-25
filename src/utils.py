@@ -23,6 +23,26 @@ AWS_ACCESS_KEY_ID = os.environ['AWS_ACCESS_KEY']
 AWS_SECRET_ACCESS_KEY = os.environ['AWS_ACCESS_SECRET']
 
 
+def delete_s3_data(bucket: str, prefix: str):
+    """Function to delete all data in an s3 bucket with a given prefix"""
+    logger.info(f'Deleting s3 data in bucket: {bucket} with prefix: {prefix}')
+    s3_client = boto3.client('s3',
+                           aws_access_key_id=AWS_ACCESS_KEY_ID,
+                           aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+                             region_name='us-east-1')
+    try:
+        response = s3_client.list_objects_v2(Bucket=bucket, Prefix=prefix)
+        if 'Contents' in response:
+            for obj in response['Contents']:
+                s3_client.delete_object(Bucket=bucket, Key=obj['Key'])
+        logger.info(f'Successfully deleted s3 data in bucket: {bucket} with prefix: {prefix}')
+        return True
+
+    except Exception as e:
+        logger.error(f'Error deleting s3 data: {str(e)}')
+        raise ValueError(f'Error deleting s3 data! {str(e)}')
+
+
 def format_df_for_s3(df: pd.DataFrame):
     """Format dataframe to be written to s3 as a csv (and avoid delimeter issues)
 
