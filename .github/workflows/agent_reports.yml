@@ -34,7 +34,8 @@ jobs:
           AWS_ACCESS_SECRET: ${{ secrets.AWS_ACCESS_SECRET }}
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
           GLUE_DATABASE_NAME: ${{ secrets.GLUE_DATABASE_NAME }}
-        run: python src/prymal_agent/shipbob_retention_by_cohort_month/main.py
+        working-directory: src/prymal_agent/shipbob_retention_by_cohort_month
+        run: python main.py
 
   
       - run: echo "Job status - ${{ job.status }}."
