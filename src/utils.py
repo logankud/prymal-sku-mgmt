@@ -184,10 +184,12 @@ def run_athena_query_no_results(bucket: str, query: str, database: str,
 
     except ParamValidationError as e:
         logger.error(f"Validation Error (potential SQL query issue): {e}")
+        raise
         # Handle invalid parameters in the request, such as an invalid SQL query
 
     except WaiterError as e:
         logger.error(f"Waiter Error: {e}")
+        raise
         # Handle errors related to waiting for query execution
 
     except ClientError as e:
@@ -196,23 +198,27 @@ def run_athena_query_no_results(bucket: str, query: str, database: str,
 
         if error_code == 'InvalidRequestException':
             logger.error(f"Invalid Request Exception: {error_message}")
+            raise
             # Handle issues with the Athena request, such as invalid SQL syntax
 
         elif error_code == 'ResourceNotFoundException':
             logger.error(f"Resource Not Found Exception: {error_message}")
+            raise
             # Handle cases where the database or query execution does not exist
 
         elif error_code == 'AccessDeniedException':
             logger.error(f"Access Denied Exception: {error_message}")
+            raise
             # Handle cases where the IAM role does not have sufficient permissions
 
         else:
             logger.error(f"Athena Error: {error_code} - {error_message}")
+            raise
             # Handle other Athena-related errors
 
     except Exception as e:
         logger.error(f"Other Exception: {str(e)}")
-        # Handle any other unexpected exceptions
+        raise
 
 
 def run_athena_query(query: str, database: str, region: str, s3_bucket: str):

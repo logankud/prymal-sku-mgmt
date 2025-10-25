@@ -1,0 +1,1 @@
+DROP TABLE IF EXISTS prymal_agent.tmp_shipbob_retention_by_cohort_stage;
