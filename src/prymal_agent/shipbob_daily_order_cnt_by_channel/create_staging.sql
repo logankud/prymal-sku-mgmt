@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS prymal_agent.tmp_shipbob_daily_stage
 WITH (
   format = 'PARQUET',
   parquet_compression = 'GZIP',
-  external_location = 's3://prymal-ops/prymal_agent/staging/shipbob/daily_order_cnt_by_channel/run_date=${RUN_DATE}/'
+  external_location = 's3://prymal-ops/staging/prymal_agent/shipbob/daily_order_cnt_by_channel/run_date=${RUN_DATE}/'
 ) AS
 SELECT
   CAST(channel_id   AS VARCHAR)            AS channel_id,
