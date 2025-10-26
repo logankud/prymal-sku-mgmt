@@ -38,11 +38,11 @@ run_athena_query_no_results(bucket=os.getenv("S3_BUCKET_NAME"),
 # Delete s3 data before creating staging table
 staging_prefix = f'staging/prymal_agent/shipbob/retention_by_cohort/report_date=${run_date}/'
 
-delete_s3_data(bucket=os.getenv("S3_BUCKET"), prefix=staging_prefix)
+delete_s3_data(bucket=os.getenv("S3_BUCKET_NAME"), prefix=staging_prefix)
 
 # Read staging query
 with open("create_staging.sql") as f:
-  QUERY = f.read().replace("${STAGING_LOCATION}", f's3://${os.getenv("S3_BUCKET")}/{staging_table_location}')
+  QUERY = f.read().replace("${STAGING_LOCATION}", f's3://${os.getenv("S3_BUCKET_NAME")}/{staging_table_location}')
 
 logger.info('Creating staging table')
 
