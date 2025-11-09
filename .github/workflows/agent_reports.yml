@@ -46,6 +46,15 @@ jobs:
         working-directory: src/prymal_agent/shipbob_daily_order_cnt_by_channel
         run: python main.py
 
+      - name: Run job - shipbob_orders_obfuscated
+        env:
+          AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_ACCESS_SECRET: ${{ secrets.AWS_ACCESS_SECRET }}
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+          GLUE_DATABASE_NAME: ${{ secrets.GLUE_DATABASE_NAME }}
+        working-directory: src/prymal_agent/shipbob_orders_obfuscated
+        run: python main.py
+
   
       - run: echo "Job status - ${{ job.status }}."
   
