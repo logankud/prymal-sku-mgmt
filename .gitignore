@@ -3,3 +3,4 @@ notebooks/*
 *.csv
 __pychache__/
 */test.py
+*.png
