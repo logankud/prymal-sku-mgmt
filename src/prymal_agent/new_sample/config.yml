@@ -1,31 +1,4 @@
 # Configuration for Prymal Agent tables
 # Each table definition includes job directory and workflow configuration
 
-tables:
-  # Partitioned table with staging workflow
-  shipbob_daily_order_cnt_by_channel:
-    description: "Daily order count by sales channel"
-    job_directory: "src/prymal_agent/shipbob_daily_order_cnt_by_channel"
-    workflow_type: "partitioned_staging"
-    date_offset_days: 2  # run_date = current - 2 days
-    staging_prefix: "staging/prymal_agent/shipbob/daily_order_cnt_by_channel/order_date={run_date}/"
-
-  shipbob_retention_by_cohort_month:
-    description: "Monthly cohort retention analysis"
-    job_directory: "src/prymal_agent/shipbob_retention_by_cohort_month"
-    workflow_type: "partitioned_staging"
-    date_offset_days: 0  # run_date = current date
-    staging_prefix: "staging/prymal_agent/shipbob/retention_by_cohort/report_date={run_date}/"
-
-  # Drop and recreate workflow
-  shipbob_current_inventory:
-    description: "Current inventory snapshot"
-    job_directory: "src/prymal_agent/shipbob_current_inventory"
-    workflow_type: "drop_recreate"
-    date_offset_days: 2  # run_date = current - 2 days
-
-  shipbob_orders_obfuscated:
-    description: "Obfuscated order data for sharing"
-    job_directory: "src/prymal_agent/shipbob_orders_obfuscated"
-    workflow_type: "drop_recreate"
-    date_offset_days: 2  # run_date = current - 2 days
+table_description: "this is a description of a table"
