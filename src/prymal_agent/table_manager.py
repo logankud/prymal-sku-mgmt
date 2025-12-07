@@ -19,8 +19,8 @@ sys.path.append(os.path.join(workspace_root, 'src'))
 from utils import run_athena_query_no_results, delete_s3_data
 
 
-class AthenaTableManager:
-    """Manages Athena table operations based on SQL file configurations"""
+class JobRunner:
+    """Manages job for populating Prymal Agent tables (prymal_agent database) using standardized workflows for pulling data out of other databases (prymal)"""
 
     def __init__(self, config_path='src/prymal_agent/config.yml'):
         self.config_path = config_path

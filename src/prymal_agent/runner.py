@@ -60,8 +60,8 @@ def main():
         if not os.path.exists(config_path):
             raise Exception(f"Config file not found: {config_path}")
 
-    # Initialize table manager
-    manager = AthenaTableManager(config_path=config_path)
+    # Initialize job runner
+    runner = JobRunner(config_path=config_path)
 
     # List tables if requested
     if args.list:
