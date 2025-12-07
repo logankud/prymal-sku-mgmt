@@ -3,15 +3,24 @@
 
 echo "-------- Prymal Agent Table Runner --------"
 
-# Default to list action if no arguments provided
-if [ $# -eq 0 ]; then
-    echo "Usage: ./run.sh [action] [table_name] [partition_date]"
-    echo "Actions: create, drop, load, list"
-    echo ""
-    echo "Listing available tables:"
-    python src/prymal_agent/runner.py --action list
+# Check if --list flag is provided
+if [ "$1" = "--list" ]; then
+    python src/prymal_agent/runner.py --list
     exit 0
 fi
 
-# Execute with provided arguments
-python src/prymal_agent/runner.py "$@"
+# Check if table name is provided
+if [ -z "$1" ]; then
+    echo "Usage: ./run.sh [table_name] [partition_date]"
+    echo "       ./run.sh --list    (to see available tables)"
+    echo ""
+    python src/prymal_agent/runner.py --list
+    exit 1
+fi
+
+# Run with table name and optional partition date
+if [ -z "$2" ]; then
+    python src/prymal_agent/runner.py --table "$1"
+else
+    python src/prymal_agent/runner.py --table "$1" --partition_date "$2"
+fi

@@ -1,75 +1,31 @@
-
 # Configuration for Prymal Agent tables
-# Each table definition includes all necessary parameters for creation and loading
+# Each table definition includes job directory and workflow configuration
 
 tables:
-  # Example: ShipBob Daily Fulfillment Summary
-  shipbob_daily_fulfillment_summary:
-    description: "Daily summary of ShipBob fulfillments by product"
-    s3_path: "shipbob/daily_fulfillment_summary"
-    partition_column: "partition_date"
-    partition_type: "date"
-    
-    # Schema definition
-    columns:
-      - name: "inventory_id"
-        type: "STRING"
-      - name: "product_name"
-        type: "STRING"
-      - name: "qty_fulfilled"
-        type: "INT"
-      - name: "fulfillment_date"
-        type: "DATE"
-    
-    # Data source query (optional - for tables built from other tables)
-    source_query: |
-      SELECT 
-        inventory_id,
-        name as product_name,
-        SUM(quantity) as qty_fulfilled,
-        DATE(fulfilled_at) as fulfillment_date
-      FROM prymal.shipbob_order_details
-      WHERE fulfillment_status = 'Fulfilled'
-      GROUP BY inventory_id, name, DATE(fulfilled_at)
-    
-    # Whether to use staging table pattern
-    use_staging: true
-    
-    # Whether this is a partitioned table
-    is_partitioned: true
-  
-  # Example 2: Shopify Daily Sales Summary
-  shopify_daily_sales_summary:
-    description: "Daily sales summary by product from Shopify orders"
-    s3_path: "shopify/daily_sales_summary"
-    partition_column: "partition_date"
-    partition_type: "date"
-    
-    columns:
-      - name: "product_id"
-        type: "STRING"
-      - name: "product_title"
-        type: "STRING"
-      - name: "variant_sku"
-        type: "STRING"
-      - name: "order_date"
-        type: "DATE"
-      - name: "total_quantity"
-        type: "INT"
-      - name: "total_revenue"
-        type: "DOUBLE"
-    
-    source_query: |
-      SELECT 
-        product_id,
-        product_title,
-        variant_sku,
-        DATE(order_created_at) as order_date,
-        SUM(quantity) as total_quantity,
-        SUM(quantity * price) as total_revenue
-      FROM prymal.shopify_order_details
-      WHERE financial_status = 'paid'
-      GROUP BY product_id, product_title, variant_sku, DATE(order_created_at)
-    
-    use_staging: true
-    is_partitioned: true
+  # Partitioned table with staging workflow
+  shipbob_daily_order_cnt_by_channel:
+    description: "Daily order count by sales channel"
+    job_directory: "src/prymal_agent/shipbob_daily_order_cnt_by_channel"
+    workflow_type: "partitioned_staging"
+    date_offset_days: 2  # run_date = current - 2 days
+    staging_prefix: "staging/prymal_agent/shipbob/daily_order_cnt_by_channel/order_date={run_date}/"
+
+  shipbob_retention_by_cohort_month:
+    description: "Monthly cohort retention analysis"
+    job_directory: "src/prymal_agent/shipbob_retention_by_cohort_month"
+    workflow_type: "partitioned_staging"
+    date_offset_days: 0  # run_date = current date
+    staging_prefix: "staging/prymal_agent/shipbob/retention_by_cohort/report_date={run_date}/"
+
+  # Drop and recreate workflow
+  shipbob_current_inventory:
+    description: "Current inventory snapshot"
+    job_directory: "src/prymal_agent/shipbob_current_inventory"
+    workflow_type: "drop_recreate"
+    date_offset_days: 2  # run_date = current - 2 days
+
+  shipbob_orders_obfuscated:
+    description: "Obfuscated order data for sharing"
+    job_directory: "src/prymal_agent/shipbob_orders_obfuscated"
+    workflow_type: "drop_recreate"
+    date_offset_days: 2  # run_date = current - 2 days
