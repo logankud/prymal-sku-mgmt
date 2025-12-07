@@ -3,11 +3,7 @@
 
 echo "-------- Prymal Agent Table Runner --------"
 
-# Check if --list flag is provided
-if [ "$1" = "--list" ]; then
-    python src/prymal_agent/runner.py --list
-    exit 0
-fi
+# 
 
 # Check if table name is provided
 if [ -z "$1" ]; then
