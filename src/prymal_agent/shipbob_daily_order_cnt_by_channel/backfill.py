@@ -44,6 +44,33 @@ def main():
         try:
             logger.info(f"Processing date: {run_date}")
             
+            # 0. First check if data exists for this date in source table
+            from src.utils import run_athena_query
+            check_query = f"""
+            SELECT COUNT(*) as record_count
+            FROM prymal.shipbob_order_details
+            WHERE DATE(order_date) = DATE '{run_date}'
+            """
+            
+            try:
+                result_df = run_athena_query(
+                    query=check_query,
+                    database=database,
+                    region=region,
+                    s3_bucket=s3_bucket
+                )
+                record_count = result_df['record_count'].iloc[0] if len(result_df) > 0 else 0
+                logger.info(f"Found {record_count} records in source table for {run_date}")
+                
+                if record_count == 0:
+                    logger.warning(f"No data found for {run_date}, skipping...")
+                    current_date += timedelta(days=1)
+                    continue
+            except Exception as e:
+                logger.error(f"Error checking source data: {e}")
+                current_date += timedelta(days=1)
+                continue
+            
             # 1. Create staging table for this specific date
             logger.info(f"Creating staging table for {run_date}...")
             
