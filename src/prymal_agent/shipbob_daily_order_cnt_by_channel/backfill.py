@@ -1,3 +1,4 @@
+
 import os
 import sys
 from datetime import datetime, timedelta
@@ -33,96 +34,96 @@ def main():
     current_date = pd.to_datetime(start_date)
     end_dt = pd.to_datetime(end_date)
 
-    date_conditions = []
-    while current_date <= end_dt:
-        run_date = current_date.strftime('%Y-%m-%d')
-        date_conditions.append(f"DATE '{run_date}'")
-        current_date += timedelta(days=1)
-
-    # Join all dates with OR
-    date_filter = " OR ".join(
-        [f"DATE(order_date) = {d}" for d in date_conditions])
-
-    # Create unique run ID for this backfill
+    # Create unique run ID for this backfill session
     run_id = datetime.now().strftime("%Y%m%d%H%M%S")
 
-    # 1. Create staging table with ALL dates
-    logger.info("Creating staging table with all backfill dates...")
-
-    create_staging_query = f"""
-    CREATE TABLE prymal_agent.tmp_shipbob_backfill_{run_id}
-    WITH (
-      format = 'PARQUET',
-      parquet_compression = 'GZIP',
-      external_location = 's3://{s3_bucket}/staging/prymal_agent/shipbob/daily_order_cnt_by_channel/backfill_{run_id}/'
-    ) AS
-    SELECT
-      CAST(channel_id AS VARCHAR) AS channel_id,
-      CAST(channel_name AS VARCHAR) AS channel_name,
-      COUNT(DISTINCT(order_number)) AS order_cnt,
-      CAST(order_date AS DATE) AS order_date
-    FROM prymal.shipbob_order_details
-    WHERE {date_filter}
-    GROUP BY
-      CAST(channel_id AS VARCHAR),
-      CAST(channel_name AS VARCHAR),
-      CAST(order_date AS DATE)
-    """
-
-    run_athena_query_no_results(bucket=s3_bucket,
-                                query=create_staging_query,
-                                database=database,
-                                region=region)
-    logger.info(f"Created staging table with all dates")
-
-    # 2. For each date, drop partition and add it pointing to the staging location
-    current_date = pd.to_datetime(start_date)
+    # Process each date individually
     while current_date <= end_dt:
         run_date = current_date.strftime('%Y-%m-%d')
-
+        
         try:
-            # Drop existing partition if exists
+            logger.info(f"Processing date: {run_date}")
+            
+            # 1. Create staging table for this specific date
+            logger.info(f"Creating staging table for {run_date}...")
+            
+            create_staging_query = f"""
+            CREATE TABLE prymal_agent.tmp_shipbob_backfill_{run_id}_{run_date.replace('-', '')}
+            WITH (
+              format = 'PARQUET',
+              parquet_compression = 'GZIP',
+              external_location = 's3://{s3_bucket}/staging/prymal_agent/shipbob/daily_order_cnt_by_channel/run_date={run_date}/'
+            ) AS
+            SELECT
+              CAST(channel_id AS VARCHAR) AS channel_id,
+              CAST(channel_name AS VARCHAR) AS channel_name,
+              COUNT(DISTINCT(order_number)) AS order_cnt,
+              CAST(order_date AS DATE) AS order_date
+            FROM prymal.shipbob_order_details
+            WHERE DATE(order_date) = DATE '{run_date}'
+            GROUP BY
+              CAST(channel_id AS VARCHAR),
+              CAST(channel_name AS VARCHAR),
+              CAST(order_date AS DATE)
+            """
+            
+            run_athena_query_no_results(
+                bucket=s3_bucket,
+                query=create_staging_query,
+                database=database,
+                region=region
+            )
+            logger.info(f"Created staging table for {run_date}")
+            
+            # 2. Drop existing partition if exists
             drop_partition_query = f"""
             ALTER TABLE prymal_agent.shipbob_daily_order_cnt_by_channel
             DROP IF EXISTS PARTITION (order_date = DATE '{run_date}')
             """
-
-            run_athena_query_no_results(bucket=s3_bucket,
-                                        query=drop_partition_query,
-                                        database=database,
-                                        region=region)
-
-            # Add partition pointing to staging data
+            
+            run_athena_query_no_results(
+                bucket=s3_bucket,
+                query=drop_partition_query,
+                database=database,
+                region=region
+            )
+            logger.info(f"Dropped partition for {run_date}")
+            
+            # 3. Add partition pointing to this date's staging data
             add_partition_query = f"""
             ALTER TABLE prymal_agent.shipbob_daily_order_cnt_by_channel
             ADD PARTITION (order_date = DATE '{run_date}')
-            LOCATION 's3://{s3_bucket}/staging/prymal_agent/shipbob/daily_order_cnt_by_channel/backfill_{run_id}/'
+            LOCATION 's3://{s3_bucket}/staging/prymal_agent/shipbob/daily_order_cnt_by_channel/run_date={run_date}/'
             """
-
-            run_athena_query_no_results(bucket=s3_bucket,
-                                        query=add_partition_query,
-                                        database=database,
-                                        region=region)
+            
+            run_athena_query_no_results(
+                bucket=s3_bucket,
+                query=add_partition_query,
+                database=database,
+                region=region
+            )
             logger.info(f"Added partition for {run_date}")
-
+            
+            # 4. Drop staging table for this date
+            drop_staging_query = f"""
+            DROP TABLE IF EXISTS prymal_agent.tmp_shipbob_backfill_{run_id}_{run_date.replace('-', '')}
+            """
+            
+            run_athena_query_no_results(
+                bucket=s3_bucket,
+                query=drop_staging_query,
+                database=database,
+                region=region
+            )
+            logger.info(f"Dropped staging table for {run_date}")
+            
         except Exception as e:
-            logger.error(
-                f"Error processing partition for {run_date}: {str(e)}")
-
+            logger.error(f"Error processing date {run_date}: {str(e)}")
+            # Continue with next date instead of stopping
+        
         # Move to next day
         current_date += timedelta(days=1)
-
-    # 3. Drop staging table
-    drop_staging_query = f"""
-    DROP TABLE IF EXISTS prymal_agent.tmp_shipbob_backfill_{run_id}
-    """
-
-    run_athena_query_no_results(bucket=s3_bucket,
-                                query=drop_staging_query,
-                                database=database,
-                                region=region)
-    logger.info(f"Dropped staging table")
-
+    
     logger.info("Backfill complete!")
 
 
