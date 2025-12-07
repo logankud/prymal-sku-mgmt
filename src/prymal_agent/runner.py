@@ -8,6 +8,7 @@ import argparse
 import logging
 from datetime import datetime, timedelta
 import pytz
+import os
 from table_manager import AthenaTableManager
 
 logging.basicConfig(
@@ -23,12 +24,12 @@ def main():
     )
 
     parser.add_argument(
-        '--table',
+        '--job_dir',
         type=str,
         required=True,
-        help='Name of the table to run'
+        help='Path to job directory containing config.yml (use this OR --table)'
     )
-
+    
     parser.add_argument(
         '--partition_date',
         type=str,
@@ -51,8 +52,16 @@ def main():
 
     args = parser.parse_args()
 
+    logger.info(f"Starting job with args: {args}")
+
+    # Check if a config.yml exists in the job directory provided
+    if args.job_dir:
+        config_path = f"{args.job_dir}/config.yml"
+        if not os.path.exists(config_path):
+            raise Exception(f"Config file not found: {config_path}")
+
     # Initialize table manager
-    manager = AthenaTableManager(config_path=args.config)
+    manager = AthenaTableManager(config_path=config_path)
 
     # List tables if requested
     if args.list:
