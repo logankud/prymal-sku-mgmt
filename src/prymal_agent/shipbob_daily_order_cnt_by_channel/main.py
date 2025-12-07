@@ -13,8 +13,8 @@ from utils import run_athena_query_no_results
 
 
 current_ts = datetime.now()
+logger.info(f'Current time: {current_ts}')
 run_date = (current_ts - timedelta(hours=24) - timedelta(days=1)).strftime("%Y-%m-%d")
-
 logger.info(f'Run date: {run_date}')
 
 # -----------------------------------------------
