@@ -34,7 +34,7 @@ def main():
         '--partition_date',
         type=str,
         required=False,
-        help='Optional: partition date in YYYY-MM-DD format (defaults based on table config)'
+        help='Optional: partition date in YYYY-MM-DD format (defaults yesterday)'
     )
 
     parser.add_argument(

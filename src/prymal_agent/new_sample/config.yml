@@ -1,4 +1,5 @@
 # Configuration for Prymal Agent tables
 # Each table definition includes job directory and workflow configuration
 
+table_name: "new_sample"
 table_description: "this is a description of a table"

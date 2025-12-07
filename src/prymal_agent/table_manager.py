@@ -10,7 +10,6 @@ import yaml
 from datetime import datetime, timedelta
 from loguru import logger
 import pytz
-from pydantic import BaseModel
 
 # Add the src/ directory to path
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -19,52 +18,33 @@ sys.path.append(os.path.join(workspace_root, 'src'))
 
 from utils import run_athena_query_no_results, delete_s3_data
 
-class JobConfig(BaseModel):
-    table_description: str
-    
 
 class JobRunner:
-    """Manages job for populating Prymal Agent tables (prymal_agent database) once daily using standardized workflows for pulling data out of other databases (prymal)"""
+    """Manages job for populating Prymal Agent tables (prymal_agent database) using standardized workflows for pulling data out of other databases (prymal)"""
 
-    def __init__(self, config_path='src/prymal_agent/config.yml',
-partition_date=None
- 
-):
+    def __init__(self, config_path='src/prymal_agent/config.yml'):
         self.config_path = config_path
         self.config = self._load_config()
         self.s3_bucket = os.getenv("S3_BUCKET_NAME")
         self.database = os.getenv("GLUE_DATABASE_NAME")
         self.region = 'us-east-1'
-        self.run_date = self._load_run_date(partition_date)
 
     def _load_config(self):
-        """Load and validate configuration from YAML file"""
+        """Load configuration from YAML file"""
         with open(self.config_path, 'r') as f:
-            config = yaml.safe_load(f)
-        
-        # Attempt to validate using the JobConfig model
-        try:
-            validated_config = JobConfig(**config_data)
-            return validated_config
-        except Exception as e:
-            raise ValueError("Configuration validation error: " + str(e))
+            return yaml.safe_load(f)
 
+    def _get_table_config(self, table_name):
+        """Get configuration for a specific table"""
+        if table_name not in self.config['tables']:
+            raise ValueError(f"Table '{table_name}' not found in configuration")
+        return self.config['tables'][table_name]
 
-    def _load_run_date(self, partition_date):
-        """Load run_date based on provided partition_date"""
-    
-        if partition_date:
-            run_date = (partition_date).strftime("%Y-%m-%d")
-        else:
-            current_ts = datetime.now(pytz.utc)
-            run_date = (current_ts - timedelta(hours=24)).strftime("%Y-%m-%d")
-            
-        return run_date
-
-    def _generate_ddl(self):
-
-        
-        
+    def _get_run_date(self, date_offset_days=1):
+        """Generate run_date with configurable offset"""
+        current_ts = datetime.now(pytz.utc)
+        run_date = (current_ts - timedelta(days=date_offset_days)).strftime("%Y-%m-%d")
+        return run_date, current_ts
 
     def _execute_sql_file(self, job_dir, sql_file, replacements):
         """Execute a SQL file with variable replacements"""
