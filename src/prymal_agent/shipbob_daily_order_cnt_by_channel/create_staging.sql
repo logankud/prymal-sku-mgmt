@@ -7,7 +7,7 @@ WITH (
 SELECT
   CAST(channel_id   AS VARCHAR)            AS channel_id,
     CAST(channel_name AS VARCHAR)            AS channel_name,
-    COUNT(*)                                 AS order_cnt,
+    COUNT(DISTINCT(order_number))            AS order_cnt,
     CAST(order_date   AS DATE)               AS order_date
   FROM prymal.shipbob_order_details
   WHERE DATE(order_date) = DATE '${RUN_DATE}'
