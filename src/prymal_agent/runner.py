@@ -61,27 +61,53 @@ partition_date=None
             
         return run_date
 
-    def _generate_ddl(self):
+    def _prepare_colummns(self):
+        """Format columns from config to use in Athena DDL"""
+        columns = self.config.columns
+        athena_columns = []
+        for column in columns:
+            column_name = column['name']
+            column_type = column['type']
+            column_comment = column.get('comment', '')
+            athena_col = f"{column_name} {column_type} COMMENT '{column_comment}'"
+            athena_columns.append(athena_col)
+        return ',\n'.join(athena_columns)
+    
 
+    def _populate_sql_template(self, sql_file_path):
+        """
+        Read a SQL template from the given path, replace the variables (${var} format), return the populated query as a string.
+        """
+
+        if not os.path.exists(sql_file_path):
+            raise FileNotFoundError(f"SQL template not found: {sql_file_path}")
+
+        # Read the template file
+        with open(sql_file_path, 'r') as f:
+            query_template = f.read()
+
+        # Prepare variable replacements
+        replacements = {
+            "${S3_BUCKET}": self.s3_bucket,
+            "${DATABASE}": self.database,
+            "${COLUMNS}": self._prepare_colummns(),
+            "${TABLE_NAME}": self.config.table_name,
+            "${TABLE_DESCRIPTION}": self.config.table_description,
+            "${RUN_DATE}": self.run_date
+        }
+
+        # Replace variables in the query
+        for var, replacement in replacements.items():
+            query_template = query_template.replace(var, replacement)
+
+        return query_template
+
+
+    def _execute_query(self, query):
+        """Execute a SQL query (str)"""
         
-        
+        logger.info(f"Executing {query}")
 
-    def _execute_sql_file(self, job_dir, sql_file, replacements):
-        """Execute a SQL file with variable replacements"""
-        sql_path = os.path.join(job_dir, sql_file)
-
-        if not os.path.exists(sql_path):
-            logger.warning(f"SQL file not found: {sql_path}, skipping")
-            return False
-
-        with open(sql_path, 'r') as f:
-            query = f.read()
-
-        # Apply replacements
-        for key, value in replacements.items():
-            query = query.replace(key, str(value))
-
-        logger.info(f"Executing {sql_file}")
         run_athena_query_no_results(
             bucket=self.s3_bucket,
             query=query,
@@ -93,88 +119,17 @@ partition_date=None
     def run_job(self, table_name, partition_date=None):
         """
         Run a standardized job workflow for a table
-        Executes SQL files in a standard order
+        This will generate the DDL and execute the query
         """
         config = self._get_table_config(table_name)
-        job_dir = config['job_directory']
 
-        # Get dates
-        if partition_date:
-            run_date = partition_date
-            current_ts = datetime.now(pytz.utc)
-        else:
-            run_date, current_ts = self._get_run_date(
-                date_offset_days=config.get('date_offset_days', 1)
-            )
+        # Get the SQL query for the table
+        ddl = self._populate_sql_template('path/to/ddl.sql')
 
-        run_id = current_ts.strftime("%Y%m%d%H%M%S")
-
-        logger.info(f"Running job: {table_name}")
-        logger.info(f"Run date: {run_date}")
-        logger.info(f"Run ID: {run_id}")
-
-        # Standard replacements available to all SQL files
-        replacements = {
-            "${RUN_DATE}": run_date,
-            "${RUN_ID}": run_id,
-            "${S3_BUCKET}": self.s3_bucket,
-            "${DATABASE}": self.database,
-        }
-
-        # Add any custom replacements from config
-        if 'custom_replacements' in config:
-            replacements.update(config['custom_replacements'])
-
-        # Get workflow steps from config or use defaults
-        workflow = config.get('workflow', self._get_default_workflow(config))
-
-        # Execute workflow steps
-        for step in workflow:
-            step_name = step['name']
-            logger.info(f"Step: {step_name}")
-
-            if step['type'] == 'delete_s3':
-                # Delete S3 data before creating staging table
-                prefix = step['prefix'].format(
-                    run_date=run_date,
-                    run_id=run_id
-                )
-                logger.info(f"Deleting S3 data: s3://{self.s3_bucket}/{prefix}")
-                delete_s3_data(bucket=self.s3_bucket, prefix=prefix)
-
-            elif step['type'] == 'sql':
-                # Execute SQL file
-                sql_file = step['file']
-                self._execute_sql_file(job_dir, sql_file, replacements)
+        # Execute the generated SQL query
+        self._execute_query(sql_query)
 
         logger.info(f"Job completed: {table_name}")
-
-    def _get_default_workflow(self, config):
-        """Generate default workflow based on table type"""
-        workflow_type = config.get('workflow_type', 'partitioned_staging')
-
-        if workflow_type == 'partitioned_staging':
-            # Standard workflow for partitioned tables with staging
-            return [
-                {'name': 'Create final table', 'type': 'sql', 'file': 'ddl.sql'},
-                {'name': 'Delete staging S3 data', 'type': 'delete_s3',
-                 'prefix': config.get('staging_prefix', 'staging/{table_name}/partition_date={run_date}/')},
-                {'name': 'Create staging table', 'type': 'sql', 'file': 'create_staging.sql'},
-                {'name': 'Drop partition if exists', 'type': 'sql', 'file': 'drop_partition_final.sql'},
-                {'name': 'Add partition to final table', 'type': 'sql', 'file': 'add_partition_final.sql'},
-                {'name': 'Drop staging table', 'type': 'sql', 'file': 'drop_table_staging.sql'},
-            ]
-
-        elif workflow_type == 'drop_recreate':
-            # Workflow for tables that get dropped and recreated
-            return [
-                {'name': 'Drop final table', 'type': 'sql', 'file': 'drop.sql'},
-                {'name': 'Create final table', 'type': 'sql', 'file': 'ddl.sql'},
-                {'name': 'Load data', 'type': 'sql', 'file': 'load.sql'},
-            ]
-
-        else:
-            raise ValueError(f"Unknown workflow_type: {workflow_type}")
 
     def list_tables(self):
         """List all configured tables"""

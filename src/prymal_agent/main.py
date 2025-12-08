@@ -58,13 +58,13 @@ def main():
     if args.job_dir:
         config_path = f"{args.job_dir}/config.yml"
         if not os.path.exists(config_path):
-            raise Exception(f"Config file not found: {config_path}")
+            raise FileNotFoundError(f"Config file not found: {config_path}")
 
     # Initialize job runner
     runner = JobRunner(config_path=config_path)
 
     # Run the job
-    manager.run_job(args.table, partition_date=args.partition_date)
+    runner.run_job(args.table, partition_date=args.partition_date)
     logger.info(f"Successfully completed job: {args.table}")
 
 
