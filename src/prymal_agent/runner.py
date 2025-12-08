@@ -21,14 +21,14 @@ from utils import run_athena_query_no_results, delete_s3_data
 
 class JobConfig(BaseModel):
     table_description: str
-    
+
 
 class JobRunner:
     """Manages job for populating Prymal Agent tables (prymal_agent database) once daily using standardized workflows for pulling data out of other databases (prymal)"""
 
     def __init__(self, config_path='src/prymal_agent/config.yml',
 partition_date=None
- 
+
 ):
         self.config_path = config_path
         self.config = self._load_config()
@@ -40,8 +40,8 @@ partition_date=None
     def _load_config(self):
         """Load and validate configuration from YAML file"""
         with open(self.config_path, 'r') as f:
-            config = yaml.safe_load(f)
-        
+            config_data = yaml.safe_load(f)
+
         # Attempt to validate using the JobConfig model
         try:
             validated_config = JobConfig(**config_data)
@@ -52,13 +52,13 @@ partition_date=None
 
     def _load_run_date(self, partition_date):
         """Load run_date based on provided partition_date"""
-    
+
         if partition_date:
             run_date = (partition_date).strftime("%Y-%m-%d")
         else:
             current_ts = datetime.now(pytz.utc)
             run_date = (current_ts - timedelta(hours=24)).strftime("%Y-%m-%d")
-            
+
         return run_date
 
     def _prepare_colummns(self):
@@ -72,7 +72,7 @@ partition_date=None
             athena_col = f"{column_name} {column_type} COMMENT '{column_comment}'"
             athena_columns.append(athena_col)
         return ',\n'.join(athena_columns)
-    
+
 
     def _populate_sql_template(self, sql_file_path):
         """
@@ -105,7 +105,7 @@ partition_date=None
 
     def _execute_query(self, query):
         """Execute a SQL query (str)"""
-        
+
         logger.info(f"Executing {query}")
 
         run_athena_query_no_results(
@@ -116,20 +116,61 @@ partition_date=None
         )
         return True
 
-    def run_job(self, table_name, partition_date=None):
+    def _get_ddl_path(self):
+        """Get path to DDL template"""
+        return os.path.join(os.path.dirname(self.config_path), 'ddl.sql')
+
+    def _get_create_staging_path(self):
+        """Get path to create staging table template"""
+        return os.path.join(os.path.dirname(self.config_path), 'create_staging.sql')
+
+    def _get_drop_partition_path(self):
+        """Get path to drop partition template"""
+        return os.path.join(os.path.dirname(self.config_path), 'drop_partition_final.sql')
+
+    def _get_add_partition_path(self):
+        """Get path to add partition template"""
+        return os.path.join(os.path.dirname(self.config_path), 'add_partition_final.sql')
+
+    def _get_drop_staging_path(self):
+        """Get path to drop staging table template"""
+        return os.path.join(os.path.dirname(self.config_path), 'drop_table_staging.sql')
+
+    def run_job(self, partition_date=None):
         """
-        Run a standardized job workflow for a table
-        This will generate the DDL and execute the query
+        Run a standardized job workflow for partitioned table with staging
+        Executes SQL templates in standard order
         """
-        config = self._get_table_config(table_name)
+        logger.info(f"Running job from {os.path.dirname(self.config_path)}")
+        logger.info(f"Run date: {self.run_date}")
 
-        # Get the SQL query for the table
-        ddl = self._populate_sql_template('path/to/ddl.sql')
+        # Standard workflow - execute in order
+        logger.info("Step 1: Create final table")
+        query = self._populate_sql_template(self._get_ddl_path())
+        self._execute_query(query)
 
-        # Execute the generated SQL query
-        self._execute_query(sql_query)
+        logger.info("Step 2: Delete staging S3 data")
+        s3_location = self.config.get('s3_location', '')
+        staging_prefix = f"staging/{s3_location}run_date={self.run_date}/"
+        delete_s3_data(bucket=self.s3_bucket, prefix=staging_prefix)
 
-        logger.info(f"Job completed: {table_name}")
+        logger.info("Step 3: Create staging table")
+        query = self._populate_sql_template(self._get_create_staging_path())
+        self._execute_query(query)
+
+        logger.info("Step 4: Drop partition if exists")
+        query = self._populate_sql_template(self._get_drop_partition_path())
+        self._execute_query(query)
+
+        logger.info("Step 5: Add partition to final table")
+        query = self._populate_sql_template(self._get_add_partition_path())
+        self._execute_query(query)
+
+        logger.info("Step 6: Drop staging table")
+        query = self._populate_sql_template(self._get_drop_staging_path())
+        self._execute_query(query)
+
+        logger.info(f"Job completed successfully")
 
     def list_tables(self):
         """List all configured tables"""
