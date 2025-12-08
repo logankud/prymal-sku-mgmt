@@ -84,9 +84,9 @@ class JobRunner:
         columns = self.config.columns
         athena_columns = []
         for column in columns:
-            column_name = column['name']
-            column_type = column['type']
-            column_comment = column.get('comment', '')
+            column_name = column.name
+            column_type = column.type
+            column_comment = column.comment
             athena_col = f"{column_name} {column_type} COMMENT '{column_comment}'"
             athena_columns.append(athena_col)
         return ',\n'.join(athena_columns)
@@ -109,7 +109,7 @@ class JobRunner:
             "${DATABASE}": self.database,
             "${COLUMNS}": self._prepare_colummns(),
             "${TABLE_NAME}": self.config.table.name,
-            "${TABLE_DESCRIPTION}": self.config.table_description,
+            "${TABLE_DESCRIPTION}": self.config.table.description,
             "${RUN_DATE}": self.run_date
         }
 
