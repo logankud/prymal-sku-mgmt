@@ -1,0 +1,38 @@
+~/workspace$ sh src/prymal_agent/run.sh src/prymal_agent/new_sample
+2025-12-08 01:11:38,744 - __main__ - INFO - Starting job with args: Namespace(job_dir='src/prymal_agent/new_sample', partition_date=None)
+2025-12-08 01:11:38.746 | INFO     | runner:run_job:180 - ************************************************************
+2025-12-08 01:11:38.746 | INFO     | runner:run_job:181 - Running job from src/prymal_agent
+2025-12-08 01:11:38.746 | INFO     | runner:run_job:182 - Run date: 2025-12-07
+2025-12-08 01:11:38.746 | INFO     | runner:run_job:183 - ************************************************************
+2025-12-08 01:11:38.746 | INFO     | runner:run_job:186 - Step 1: Create (if not exists) final table
+2025-12-08 01:11:38.746 | INFO     | runner:run_job:187 - ************************************************************
+2025-12-08 01:11:38.746 | INFO     | runner:_execute_query:125 - Executing CREATE EXTERNAL TABLE IF NOT EXISTS prymal.new_sample (
+column1 string COMMENT 'This is the first column.',
+column2 int COMMENT 'This is the second column.'
+)
+${PARTITION_CLAUSE}
+STORED AS PARQUET
+LOCATION 's3://prymal-ops/${S3_LOCATION}'
+TBLPROPERTIES (
+    'comment'='${TABLE_COMMENT}'
+);
+
+2025-12-08 01:11:38.982 | ERROR    | utils:run_athena_query_no_results:220 - Invalid Request Exception: line 1:8: mismatched input 'EXTERNAL'. Expecting: 'MATERIALIZED', 'MULTI', 'OR', 'PROTECTED', 'ROLE', 'SCHEMA', 'TABLE', 'VIEW'
+Traceback (most recent call last):
+  File "/home/runner/workspace/src/prymal_agent/main.py", line 51, in <module>
+    main()
+  File "/home/runner/workspace/src/prymal_agent/main.py", line 47, in main
+    runner.run_job(partition_date=args.partition_date)
+  File "/home/runner/workspace/src/prymal_agent/runner.py", line 189, in run_job
+    self._execute_query(query)
+  File "/home/runner/workspace/src/prymal_agent/runner.py", line 127, in _execute_query
+    run_athena_query_no_results(bucket=self.s3_bucket,
+  File "/home/runner/workspace/src/utils.py", line 174, in run_athena_query_no_results
+    response = athena_client.start_query_execution(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/botocore/client.py", line 565, in _api_call
+    return self._make_api_call(operation_name, kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/botocore/client.py", line 1021, in _make_api_call
+    raise error_class(parsed_response, operation_name)
+botocore.errorfactory.InvalidRequestException: An error occurred (InvalidRequestException) when calling the StartQueryExecution operation: line 1:8: mismatched input 'EXTERNAL'. Expecting: 'MATERIALIZED', 'MULTI', 'OR', 'PROTECTED', 'ROLE', 'SCHEMA', 'TABLE', 'VIEW'
