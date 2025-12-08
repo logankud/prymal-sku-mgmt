@@ -6,6 +6,7 @@ Handles all common logic that was previously in individual main.py files
 
 import os
 import sys
+from numpy import partition
 import yaml
 from datetime import datetime, timedelta
 from loguru import logger
@@ -20,18 +21,30 @@ sys.path.append(os.path.join(workspace_root, 'src'))
 from utils import run_athena_query_no_results, delete_s3_data
 
 
+class TableConfig(BaseModel):
+    name: str
+    description: str
+
+
+class ColumnConfig(BaseModel):
+    name: str
+    type: str
+    comment: str
+
+
 class JobConfig(BaseModel):
-    table_description: str
+    table: TableConfig
+    columns: list[ColumnConfig]
 
 
 class JobRunner:
     """Manages job for populating Prymal Agent tables (prymal_agent database) once daily using standardized workflows for pulling data out of other databases (prymal)"""
 
     def __init__(self,
-                 config_path: str,
+                 job_dir: str,
                  template_dir='src/prymal_agent/templates',
                  partition_date=None):
-        self.config_path = config_path
+        self.job_dir = job_dir
         self.config = self._load_config()
         self.template_dir = template_dir
         self.s3_bucket = os.getenv("S3_BUCKET_NAME")
@@ -41,12 +54,11 @@ class JobRunner:
 
     def _load_config(self):
         """Load and validate configuration from YAML file"""
+        config_path = os.path.join(self.job_dir, 'config.yml')
+        if not os.path.exists(config_path):
+            raise FileNotFoundError(f"Config file not found: {config_path}")
 
-        if not os.path.exists(self.config_path):
-            raise FileNotFoundError(
-                f"Config file not found: {self.config_path}")
-
-        with open(self.config_path, 'r') as f:
+        with open(config_path, 'r') as f:
             config_data = yaml.safe_load(f)
 
         # Attempt to validate using the JobConfig model
@@ -129,38 +141,45 @@ class JobRunner:
         """Get path to create staging table template"""
         path = os.path.join(self.template_dir, 'create_staging.sql')
         if not os.path.exists(path):
-            raise FileNotFoundError(f"Create staging table template not found: {path}")
+            raise FileNotFoundError(
+                f"Create staging table template not found: {path}")
         return path
 
     def _get_drop_partition_path(self):
         """Get path to drop partition template"""
         path = os.path.join(self.template_dir, 'drop_partition_final.sql')
         if not os.path.exists(path):
-            raise FileNotFoundError(f"Drop partition template not found: {path}")
+            raise FileNotFoundError(
+                f"Drop partition template not found: {path}")
         return path
 
     def _get_add_partition_path(self):
         """Get path to add partition template"""
         path = os.path.join(self.template_dir, 'add_partition_final.sql')
         if not os.path.exists(path):
-            raise FileNotFoundError(f"Add partition template not found: {path}")
+            raise FileNotFoundError(
+                f"Add partition template not found: {path}")
         return path
 
     def _get_drop_staging_path(self):
         """Get path to drop staging table template"""
         path = os.path.join(self.template_dir, 'drop_table_staging.sql')
         if not os.path.exists(path):
-            raise FileNotFoundError(f"Drop staging table template not found: {path}")
+            raise FileNotFoundError(
+                f"Drop staging table template not found: {path}")
         return path
 
-    def run_job(self, partition_date=self.run_date):
+    def run_job(self, partition_date: None):
         """
         Run a standardized job workflow for partitioned table with staging
         Executes SQL templates in standard order
         """
+
+        run_date = partition_date if partition_date else self.run_date
+
         logger.info('*' * 60)
-        logger.info(f"Running job from {os.path.dirname(self.config_path)}")
-        logger.info(f"Run date: {self.run_date}")
+        logger.info(f"Running job from {os.path.dirname(self.job_dir)}")
+        logger.info(f"Run date: {run_date}")
         logger.info('*' * 60)
 
         # Standard workflow - execute in order

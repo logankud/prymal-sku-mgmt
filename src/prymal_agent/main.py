@@ -41,10 +41,11 @@ def main():
     logger.info(f"Starting job with args: {args}")
 
     # Initialize job runner
-    runner = JobRunner(config_path=args.job_dir)
+    runner = JobRunner(job_dir=args.job_dir)
 
     # Run the job
     runner.run_job(partition_date=args.partition_date)
+
 
 if __name__ == '__main__':
     main()

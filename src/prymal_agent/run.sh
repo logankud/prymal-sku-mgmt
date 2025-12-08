@@ -1,8 +1,6 @@
 
 #!/bin/bash
 
-echo "-------- Prymal Agent Table Runner --------"
-
 # Check if job_dir is provided
 if [ -z "$1" ]; then
     echo "Usage: ./run.sh <job_dir> [partition_date]"
