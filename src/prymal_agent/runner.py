@@ -114,7 +114,7 @@ class JobRunner:
             "${RUN_DATE}": self.run_date,
             "${PARTITION_COLUMN}": self.config.table.partition_column
         }
-        
+
         # Add SELECT_QUERY if provided
         if select_query:
             replacements["${SELECT_QUERY}"] = select_query
@@ -136,14 +136,14 @@ class JobRunner:
                                     region=self.region)
         return True
 
-    def _get_ddl_path(self):
+    def _get_ddl_template(self):
         """Get path to DDL template"""
         path = os.path.join(self.template_dir, 'ddl.sql')
         if not os.path.exists(path):
             raise FileNotFoundError(f"DDL template not found: {path}")
         return path
 
-    def _get_create_staging_path(self):
+    def _get_create_staging_template(self):
         """Get path to create staging table template"""
         path = os.path.join(self.template_dir, 'create_staging.sql')
         if not os.path.exists(path):
@@ -151,7 +151,14 @@ class JobRunner:
                 f"Create staging table template not found: {path}")
         return path
 
-    def _get_drop_partition_path(self):
+    def _get_select_query_template(self):
+        """Get path to template for the SELECT query to poplate the staging table"""
+        path = os.path.join(self.job_dir, 'select_query.sql')
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Select query template not found: {path}")
+        return path
+
+    def _get_drop_partition_template(self):
         """Get path to drop partition template"""
         path = os.path.join(self.template_dir, 'drop_partition_final.sql')
         if not os.path.exists(path):
@@ -159,7 +166,7 @@ class JobRunner:
                 f"Drop partition template not found: {path}")
         return path
 
-    def _get_add_partition_path(self):
+    def _get_add_partition_template(self):
         """Get path to add partition template"""
         path = os.path.join(self.template_dir, 'add_partition_final.sql')
         if not os.path.exists(path):
@@ -167,7 +174,7 @@ class JobRunner:
                 f"Add partition template not found: {path}")
         return path
 
-    def _get_drop_staging_path(self):
+    def _get_drop_staging_template(self):
         """Get path to drop staging table template"""
         path = os.path.join(self.template_dir, 'drop_table_staging.sql')
         if not os.path.exists(path):
@@ -191,8 +198,11 @@ class JobRunner:
         # Standard workflow - execute in order
         logger.info("Step 1: Create (if not exists) final table")
         logger.info('*' * 60)
-        query = self._populate_sql_template(self._get_ddl_path())
+        query = self._populate_sql_template(self._get_ddl_template())
         self._execute_query(query)
+
+        logger.info("*" * 60)
+        #-------------------------------------
 
         # logger.info("Step 2: Delete staging S3 data")
         # logger.info('*' * 60)
@@ -202,22 +212,38 @@ class JobRunner:
 
         logger.info("Step 2: Create staging table")
         logger.info('*' * 60)
-        query = self._populate_sql_template(self._get_create_staging_path())
+
+        select_query = self._populate_sql_template(
+            self._get_select_query_template())
+
+        query = self._populate_sql_template(
+            self._get_create_staging_template(), select_query=select_query)
+
         self._execute_query(query)
 
-        # logger.info("Step 4: Drop partition if exists")
-        # logger.info('*' * 60)
-        # query = self._populate_sql_template(self._get_drop_partition_path())
-        # self._execute_query(query)
+        logger.info("*" * 60)
+        #-------------------------------------
 
-        # logger.info("Step 5: Add partition to final table")
-        # logger.info('*' * 60)
-        # query = self._populate_sql_template(self._get_add_partition_path())
-        # self._execute_query(query)
+        logger.info("Step 3: Drop partition from final table if exists")
+        logger.info('*' * 60)
+        query = self._populate_sql_template(self._get_drop_partition_template())
+        self._execute_query(query)
+
+        logger.info("*" * 60)
+        #-------------------------------------
+
+        logger.info("Step 4: Add partition to final table")
+        logger.info('*' * 60)
+        query = self._populate_sql_template(self._get_add_partition_template())
+        self._execute_query(query)
+        
+        logger.info("*" * 60)
+        #-------------------------------------
+        
 
         # logger.info("Step 6: Drop staging table")
         # logger.info('*' * 60)
-        # query = self._populate_sql_template(self._get_drop_staging_path())
+        # query = self._populate_sql_template(self._get_drop_staging_template())
         # self._execute_query(query)
 
         logger.info(f"Job completed successfully")
