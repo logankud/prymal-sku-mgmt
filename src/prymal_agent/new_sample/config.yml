@@ -1,10 +1,5 @@
-# Configuration for Prymal Agent tables
-# Each table definition includes job directory and workflow configuration
-
-
-
 table:
-  name: "new_sample"
+  name: "new_sample_2"
   description: "this is a description of a table"
   partition_column: "partition_column"
 columns:
