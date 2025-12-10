@@ -1,4 +1,4 @@
 
 ALTER TABLE ${DATABASE}.${TABLE_NAME}
 ADD PARTITION (${PARTITION_COLUMN} = DATE '${RUN_DATE}')
-LOCATION 's3://${S3_BUCKET}/staging/prymal_agent/${TABLE_NAME}/run_date=${RUN_DATE}/';
+LOCATION 's3://${S3_BUCKET}/staging/prymal_agent/${TABLE_NAME}/${PARTITION_COLUMN}=${RUN_DATE}/';
