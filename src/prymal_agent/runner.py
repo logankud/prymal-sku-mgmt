@@ -92,7 +92,7 @@ class JobRunner:
             athena_columns.append(athena_col)
         return ',\n'.join(athena_columns)
 
-    def _populate_sql_template(self, sql_file_path):
+    def _populate_sql_template(self, sql_file_path, select_query=None):
         """
         Read a SQL template from the given path, replace the variables (${var} format), return the populated query as a string.
         """
@@ -114,6 +114,10 @@ class JobRunner:
             "${RUN_DATE}": self.run_date,
             "${PARTITION_COLUMN}": self.config.table.partition_column
         }
+        
+        # Add SELECT_QUERY if provided
+        if select_query:
+            replacements["${SELECT_QUERY}"] = select_query
 
         # Replace variables in the query
         for var, replacement in replacements.items():
