@@ -2,9 +2,11 @@
 # Each table definition includes job directory and workflow configuration
 
 
+
 table:
   name: "new_sample"
   description: "this is a description of a table"
+  partition_column: "partition_column"
 columns:
   - name: "column1"
     type: "string"

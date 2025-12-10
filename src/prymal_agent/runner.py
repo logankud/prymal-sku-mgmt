@@ -24,6 +24,7 @@ from utils import run_athena_query_no_results, delete_s3_data
 class TableConfig(BaseModel):
     name: str
     description: str
+    partition_column: str
 
 
 class ColumnConfig(BaseModel):
@@ -110,7 +111,8 @@ class JobRunner:
             "${COLUMNS}": self._prepare_colummns(),
             "${TABLE_NAME}": self.config.table.name,
             "${TABLE_DESCRIPTION}": self.config.table.description,
-            "${RUN_DATE}": self.run_date
+            "${RUN_DATE}": self.run_date,
+            "${PARTITION_COLUMN}": self.config.table.partition_column
         }
 
         # Replace variables in the query
@@ -122,7 +124,7 @@ class JobRunner:
     def _execute_query(self, query):
         """Execute a SQL query (str)"""
 
-        logger.info(f"Executing {query}")
+        logger.info(f"Executing query {query}")
 
         run_athena_query_no_results(bucket=self.s3_bucket,
                                     query=query,
@@ -188,30 +190,30 @@ class JobRunner:
         query = self._populate_sql_template(self._get_ddl_path())
         self._execute_query(query)
 
-        logger.info("Step 2: Delete staging S3 data")
-        logger.info('*' * 60)
-        s3_location = self.config.get('s3_location', '')
-        staging_prefix = f"staging/{s3_location}run_date={self.run_date}/"
-        delete_s3_data(bucket=self.s3_bucket, prefix=staging_prefix)
+        # logger.info("Step 2: Delete staging S3 data")
+        # logger.info('*' * 60)
+        # s3_location = self.config.get('s3_location', '')
+        # staging_prefix = f"staging/{s3_location}run_date={self.run_date}/"
+        # delete_s3_data(bucket=self.s3_bucket, prefix=staging_prefix)
 
-        logger.info("Step 3: Create staging table")
+        logger.info("Step 2: Create staging table")
         logger.info('*' * 60)
         query = self._populate_sql_template(self._get_create_staging_path())
         self._execute_query(query)
 
-        logger.info("Step 4: Drop partition if exists")
-        logger.info('*' * 60)
-        query = self._populate_sql_template(self._get_drop_partition_path())
-        self._execute_query(query)
+        # logger.info("Step 4: Drop partition if exists")
+        # logger.info('*' * 60)
+        # query = self._populate_sql_template(self._get_drop_partition_path())
+        # self._execute_query(query)
 
-        logger.info("Step 5: Add partition to final table")
-        logger.info('*' * 60)
-        query = self._populate_sql_template(self._get_add_partition_path())
-        self._execute_query(query)
+        # logger.info("Step 5: Add partition to final table")
+        # logger.info('*' * 60)
+        # query = self._populate_sql_template(self._get_add_partition_path())
+        # self._execute_query(query)
 
-        logger.info("Step 6: Drop staging table")
-        logger.info('*' * 60)
-        query = self._populate_sql_template(self._get_drop_staging_path())
-        self._execute_query(query)
+        # logger.info("Step 6: Drop staging table")
+        # logger.info('*' * 60)
+        # query = self._populate_sql_template(self._get_drop_staging_path())
+        # self._execute_query(query)
 
         logger.info(f"Job completed successfully")
