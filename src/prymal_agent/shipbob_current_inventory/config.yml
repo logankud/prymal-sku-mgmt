@@ -1,7 +1,7 @@
 
 table:
   name: "shipbob_current_inventory"
-  description: "One record per inventory item in ShipBob. ShipBob is where product inventory is maintained, and shows the inventory level of products that are sold across multiple sales channel. The 'id' column is the distinct identifier for a product and maps to the inventory_id in ShipBob order data. The latest snapshot date contains the current inventory levels as of ${RUN_DATE}"
+  description: "One record per inventory item in ShipBob. ShipBob is where product inventory is maintained, and shows the inventory level of products that are sold across multiple sales channel. The 'id' column is the distinct identifier for a product and maps to the inventory_id in ShipBob order data. The latest snapshot date contains the current inventory levels as of the partition_date column"
   partition_column: "partition_date"
 columns:
   - name: "id"

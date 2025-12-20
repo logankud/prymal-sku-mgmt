@@ -1,0 +1,52 @@
+~/workspace$ sh src/prymal_agent/run.sh src/prymal_agent/shipbob_current_inventory
+2025-12-20 16:37:59,627 - __main__ - INFO - Starting job with args: Namespace(job_dir='src/prymal_agent/shipbob_current_inventory', partition_date=None)
+2025-12-20 16:37:59.632 | INFO     | runner:run_job:193 - ************************************************************
+2025-12-20 16:37:59.632 | INFO     | runner:run_job:194 - Running job from src/prymal_agent
+2025-12-20 16:37:59.632 | INFO     | runner:run_job:195 - Run date: 2025-12-19
+2025-12-20 16:37:59.632 | INFO     | runner:run_job:196 - ************************************************************
+2025-12-20 16:37:59.632 | INFO     | runner:run_job:199 - Step 1: Create (if not exists) final table
+2025-12-20 16:37:59.632 | INFO     | runner:run_job:200 - ************************************************************
+2025-12-20 16:37:59.633 | INFO     | runner:_execute_query:131 - Executing query 
+CREATE EXTERNAL TABLE IF NOT EXISTS "prymal"."shipbob_current_inventory" (
+id bigint COMMENT 'shipbob inventory ID (unique identifier for a physical product across all sales channels. Use this to map store listings to inventory items)',
+name string COMMENT 'name of the product',
+is_digital boolean COMMENT 'whether the product is a digital item',
+is_case_pick boolean COMMENT 'whether the product is case picked',
+is_lot boolean COMMENT 'whether the product is part of a lot',
+total_fulfillable_quantity bigint COMMENT 'total inventory qty available to be fulfilled (after accounting for existing unfilled orders)',
+total_onhand_quantity bigint COMMENT 'total inventory qty available (not accounting for unfilled orders)',
+total_committed_quantity bigint COMMENT 'total inventory qty commited to orders to be fulfilled',
+total_sellable_quantity bigint COMMENT 'total inventory qty available to be sold',
+total_awaiting_quantity bigint COMMENT 'total inventory awaiting (in route to fulfilment center)',
+total_exception_quantity bigint COMMENT 'total inventory qty commited to orders above and beyond available inventory',
+total_internal_transfer_quantity bigint COMMENT 'total inventory qty being transferred to/from other fultillment center locations',
+total_backordered_quantity bigint COMMENT 'total units on back order',
+is_active boolean COMMENT 'whether or not the product is active'
+)
+PARTITIONED BY (partition_date DATE)
+STORED AS PARQUET
+LOCATION 's3://prymal-ops/prymal_agent/shipbob_current_inventory/'
+TBLPROPERTIES (
+    'comment'='One record per inventory item in ShipBob. ShipBob is where product inventory is maintained, and shows the inventory level of products that are sold across multiple sales channel. The 'id' column is the distinct identifier for a product and maps to the inventory_id in ShipBob order data. The latest snapshot date contains the current inventory levels as of the partition_date column'
+);
+
+2025-12-20 16:37:59.892 | ERROR    | utils:run_athena_query_no_results:220 - Invalid Request Exception: line 1:8: mismatched input 'EXTERNAL'. Expecting: 'MATERIALIZED', 'MULTI', 'OR', 'PROTECTED', 'ROLE', 'SCHEMA', 'TABLE', 'VIEW'
+Traceback (most recent call last):
+  File "/home/runner/workspace/src/prymal_agent/main.py", line 51, in <module>
+    main()
+  File "/home/runner/workspace/src/prymal_agent/main.py", line 47, in main
+    runner.run_job(partition_date=args.partition_date)
+  File "/home/runner/workspace/src/prymal_agent/runner.py", line 202, in run_job
+    self._execute_query(query)
+  File "/home/runner/workspace/src/prymal_agent/runner.py", line 133, in _execute_query
+    run_athena_query_no_results(bucket=self.s3_bucket,
+  File "/home/runner/workspace/src/utils.py", line 174, in run_athena_query_no_results
+    response = athena_client.start_query_execution(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/botocore/client.py", line 565, in _api_call
+    return self._make_api_call(operation_name, kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/botocore/client.py", line 1021, in _make_api_call
+    raise error_class(parsed_response, operation_name)
+botocore.errorfactory.InvalidRequestException: An error occurred (InvalidRequestException) when calling the StartQueryExecution operation: line 1:8: mismatched input 'EXTERNAL'. Expecting: 'MATERIALIZED', 'MULTI', 'OR', 'PROTECTED', 'ROLE', 'SCHEMA', 'TABLE', 'VIEW'
+~/workspace$ 
