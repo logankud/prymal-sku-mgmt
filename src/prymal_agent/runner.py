@@ -50,6 +50,7 @@ class JobRunner:
         self.template_dir = template_dir
         self.s3_bucket = os.getenv("S3_BUCKET_NAME")
         self.database = os.getenv("GLUE_DATABASE_NAME")
+        self.agent_database = os.getenv("GLUE_DATABASE_NAME_AGENT")
         self.region = 'us-east-1'
         self.run_date = self._load_run_date(partition_date)
 
@@ -108,6 +109,7 @@ class JobRunner:
         replacements = {
             "${S3_BUCKET}": self.s3_bucket,
             "${DATABASE}": self.database,
+            "${AGENT_DATABASE}": self.agent_database,
             "${COLUMNS}": self._prepare_colummns(),
             "${TABLE_NAME}": self.config.table.name,
             "${TABLE_DESCRIPTION}": self.config.table.description,

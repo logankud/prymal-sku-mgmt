@@ -1,5 +1,5 @@
 
-CREATE TABLE IF NOT EXISTS ${DATABASE}.tmp_${TABLE_NAME}_stage
+CREATE TABLE IF NOT EXISTS ${AGENT_DATABASE}.tmp_${TABLE_NAME}_stage
 WITH (
   format = 'PARQUET',
   parquet_compression = 'GZIP',
