@@ -230,7 +230,8 @@ class JobRunner:
 
         logger.info("Step 4: Drop partition from final table if exists")
         logger.info('*' * 60)
-        query = self._populate_sql_template(self._get_drop_partition_template())
+        query = self._populate_sql_template(
+            self._get_drop_partition_template())
         self._execute_query(query)
 
         logger.info("*" * 60)
@@ -240,10 +241,9 @@ class JobRunner:
         logger.info('*' * 60)
         query = self._populate_sql_template(self._get_add_partition_template())
         self._execute_query(query)
-        
+
         logger.info("*" * 60)
         #-------------------------------------
-        
 
         # logger.info("Step 6: Drop staging table")
         # logger.info('*' * 60)
