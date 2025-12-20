@@ -1,0 +1,11 @@
+table:
+  name: "new_sample_2"
+  description: "this is a description of a table"
+  partition_column: "partition_column"
+columns:
+  - name: "column1"
+    type: "string"
+    comment: "This is the first column."
+  - name: "column2"
+    type: "int"
+    comment: "This is the second column."
