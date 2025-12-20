@@ -204,13 +204,15 @@ class JobRunner:
         logger.info("*" * 60)
         #-------------------------------------
 
-        # logger.info("Step 2: Delete staging S3 data")
-        # logger.info('*' * 60)
-        # s3_location = self.config.get('s3_location', '')
-        # staging_prefix = f"staging/{s3_location}run_date={self.run_date}/"
-        # delete_s3_data(bucket=self.s3_bucket, prefix=staging_prefix)
+        logger.info("Step 2: Delete old staging S3 data if exists")
+        logger.info('*' * 60)
+        staging_prefix = f"staging/prymal_agent/{self.config.table.name}/{self.config.table.partition_column}={self.run_date}/"
+        delete_s3_data(bucket=self.s3_bucket, prefix=staging_prefix)
 
-        logger.info("Step 2: Create staging table")
+        logger.info("*" * 60)
+        #-------------------------------------
+
+        logger.info("Step 3: Create staging table")
         logger.info('*' * 60)
 
         select_query = self._populate_sql_template(
@@ -224,7 +226,7 @@ class JobRunner:
         logger.info("*" * 60)
         #-------------------------------------
 
-        logger.info("Step 3: Drop partition from final table if exists")
+        logger.info("Step 4: Drop partition from final table if exists")
         logger.info('*' * 60)
         query = self._populate_sql_template(self._get_drop_partition_template())
         self._execute_query(query)
@@ -232,7 +234,7 @@ class JobRunner:
         logger.info("*" * 60)
         #-------------------------------------
 
-        logger.info("Step 4: Add partition to final table")
+        logger.info("Step 5: Add partition to final table")
         logger.info('*' * 60)
         query = self._populate_sql_template(self._get_add_partition_template())
         self._execute_query(query)
