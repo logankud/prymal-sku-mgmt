@@ -11,7 +11,7 @@ import yaml
 from datetime import datetime, timedelta
 from loguru import logger
 import pytz
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 # Add the src/ directory to path
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -26,7 +26,8 @@ class TableConfig(BaseModel):
     description: str
     partition_column: str
 
-    @validator('description')
+    @field_validator('description')
+    @classmethod
     def validate_description(cls, value):
         if "'" in value or '"' in value:
             raise ValueError(
