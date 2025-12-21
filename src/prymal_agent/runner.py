@@ -26,6 +26,13 @@ class TableConfig(BaseModel):
     description: str
     partition_column: str
 
+    @validator('description')
+    def validate_description(cls, value):
+        if "'" in value or '"' in value:
+            raise ValueError(
+                "Description must not contain single or double quotes.")
+        return value
+
 
 class ColumnConfig(BaseModel):
     name: str
