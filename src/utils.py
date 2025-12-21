@@ -166,8 +166,7 @@ def run_athena_query_no_results(bucket: str, query: str, database: str,
     # Initialize Athena client
     athena_client = boto3.client('athena',
                                  region_name=region,
-                                 aws_access_key_id=AWS_ACCESS_KEY_ID,
-                                 aws_secret_access_key=AWS_SECRET_ACCESS_KEY)
+                                 aws_access_key_id=AWS_ACCESS_KEY_ID,                                aws_secret_access_key=AWS_SECRET_ACCESS_KEY)
 
     # Execute the query
     try:

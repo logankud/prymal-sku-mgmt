@@ -127,14 +127,14 @@ class JobRunner:
 
         return query_template
 
-    def _execute_query(self, query, database):
+    def _execute_query(self, query):
         """Execute a SQL query (str)"""
 
         logger.info(f"Executing query {query}")
 
         run_athena_query_no_results(bucket=self.s3_bucket,
                                     query=query,
-                                    database=database,
+                                    database=self.database,
                                     region=self.region)
         return True
 
@@ -201,7 +201,7 @@ class JobRunner:
         logger.info("Step 1: Create (if not exists) final table")
         logger.info('*' * 60)
         query = self._populate_sql_template(self._get_ddl_template())
-        self._execute_query(query, self.agent_database)
+        self._execute_query(query)
 
         logger.info("*" * 60)
         #-------------------------------------
@@ -223,7 +223,7 @@ class JobRunner:
         query = self._populate_sql_template(
             self._get_create_staging_template(), select_query=select_query)
 
-        self._execute_query(query, self.agent_database)
+        self._execute_query(query)
 
         logger.info("*" * 60)
         #-------------------------------------
@@ -232,7 +232,7 @@ class JobRunner:
         logger.info('*' * 60)
         query = self._populate_sql_template(
             self._get_drop_partition_template())
-        self._execute_query(query, self.agent_database)
+        self._execute_query(query)
 
         logger.info("*" * 60)
         #-------------------------------------
@@ -240,7 +240,7 @@ class JobRunner:
         logger.info("Step 5: Add partition to final table")
         logger.info('*' * 60)
         query = self._populate_sql_template(self._get_add_partition_template())
-        self._execute_query(query, self.agent_database)
+        self._execute_query(query)
 
         logger.info("*" * 60)
         #-------------------------------------
