@@ -1,0 +1,77 @@
+~/workspace$ sh src/prymal_agent/run.sh src/prymal_agent/shipbob_current_inventory
+2025-12-27 17:46:03,217 - __main__ - INFO - Starting job with args: Namespace(job_dir='src/prymal_agent/shipbob_current_inventory', partition_date=None)
+2025-12-27 17:46:03.223 | INFO     | runner:run_job:203 - ************************************************************
+2025-12-27 17:46:03.223 | INFO     | runner:run_job:204 - Running job from src/prymal_agent
+2025-12-27 17:46:03.224 | INFO     | runner:run_job:205 - Run date: 2025-12-26
+2025-12-27 17:46:03.224 | INFO     | runner:run_job:206 - ************************************************************
+2025-12-27 17:46:03.224 | INFO     | runner:run_job:209 - Step 1: Create (if not exists) final table
+2025-12-27 17:46:03.224 | INFO     | runner:run_job:210 - ************************************************************
+2025-12-27 17:46:03.226 | INFO     | runner:_execute_query:141 - Executing query 
+CREATE EXTERNAL TABLE IF NOT EXISTS prymal_agent.shipbob_current_inventory (
+id bigint COMMENT 'shipbob inventory ID (unique identifier for a physical product across all sales channels. Use this to map store listings to inventory items)',
+name string COMMENT 'name of the product',
+is_digital boolean COMMENT 'whether the product is a digital item',
+is_case_pick boolean COMMENT 'whether the product is case picked',
+is_lot boolean COMMENT 'whether the product is part of a lot',
+total_fulfillable_quantity bigint COMMENT 'total inventory qty available to be fulfilled (after accounting for existing unfilled orders)',
+total_onhand_quantity bigint COMMENT 'total inventory qty available (not accounting for unfilled orders)',
+total_committed_quantity bigint COMMENT 'total inventory qty commited to orders to be fulfilled',
+total_sellable_quantity bigint COMMENT 'total inventory qty available to be sold',
+total_awaiting_quantity bigint COMMENT 'total inventory awaiting (in route to fulfilment center)',
+total_exception_quantity bigint COMMENT 'total inventory qty commited to orders above and beyond available inventory',
+total_internal_transfer_quantity bigint COMMENT 'total inventory qty being transferred to/from other fultillment center locations',
+total_backordered_quantity bigint COMMENT 'total units on back order',
+is_active boolean COMMENT 'whether or not the product is active'
+)
+PARTITIONED BY (partition_date DATE)
+STORED AS PARQUET
+LOCATION 's3://prymal-ops/prymal_agent/shipbob_current_inventory/'
+TBLPROPERTIES (
+    'comment'='One record per inventory item in ShipBob. ShipBob is where product inventory is maintained, and shows the inventory level of products that are sold across multiple sales channel. The id column is the distinct identifier for a product and maps to the inventory_id in ShipBob order data. The latest snapshot date contains the current inventory levels as of the partition_date column'
+);
+
+2025-12-27 17:46:03.657 | INFO     | utils:run_athena_query_no_results:185 - Running query..
+2025-12-27 17:46:04.207 | INFO     | utils:run_athena_query_no_results:202 - Query Succeeded!
+2025-12-27 17:46:04.209 | INFO     | runner:run_job:214 - ************************************************************
+2025-12-27 17:46:04.209 | INFO     | runner:run_job:217 - Step 2: Delete old staging S3 data if exists
+2025-12-27 17:46:04.210 | INFO     | runner:run_job:218 - ************************************************************
+2025-12-27 17:46:04.210 | INFO     | utils:delete_s3_data:28 - Deleting s3 data in bucket: prymal-ops with prefix: staging/prymal_agent/shipbob_current_inventory/partition_date=2025-12-26/
+2025-12-27 17:46:04.443 | INFO     | utils:delete_s3_data:38 - Successfully deleted s3 data in bucket: prymal-ops with prefix: staging/prymal_agent/shipbob_current_inventory/partition_date=2025-12-26/
+2025-12-27 17:46:04.445 | INFO     | runner:run_job:222 - ************************************************************
+2025-12-27 17:46:04.445 | INFO     | runner:run_job:225 - Step 3: Create staging table
+2025-12-27 17:46:04.445 | INFO     | runner:run_job:226 - ************************************************************
+2025-12-27 17:46:04.446 | INFO     | runner:_execute_query:141 - Executing query 
+CREATE TABLE IF NOT EXISTS prymal_agent.tmp_shipbob_current_inventory_stage
+WITH (
+  format = 'PARQUET',
+  parquet_compression = 'GZIP',
+  external_location = 's3://prymal-ops/staging/prymal_agent/shipbob_current_inventory/partition_date=2025-12-26/'
+) AS
+SELECT * 
+FROM prymal.shipbob_inventory_details
+WHERE partition_date = (SELECT MAX(partition_date) FROM shipbob_inventory_details)
+
+
+2025-12-27 17:46:04.628 | INFO     | utils:run_athena_query_no_results:185 - Running query..
+2025-12-27 17:46:05.436 | INFO     | utils:run_athena_query_no_results:202 - Query Succeeded!
+2025-12-27 17:46:05.438 | INFO     | runner:run_job:236 - ************************************************************
+2025-12-27 17:46:05.438 | INFO     | runner:run_job:239 - Step 4: Drop partition from final table if exists
+2025-12-27 17:46:05.438 | INFO     | runner:run_job:240 - ************************************************************
+2025-12-27 17:46:05.438 | INFO     | runner:_execute_query:141 - Executing query ALTER TABLE prymal_agent.shipbob_current_inventory
+DROP PARTITION (partition_date = DATE '2025-12-26');
+
+2025-12-27 17:46:05.625 | INFO     | utils:run_athena_query_no_results:185 - Running query..
+2025-12-27 17:46:06.182 | INFO     | utils:run_athena_query_no_results:202 - Query Succeeded!
+2025-12-27 17:46:06.184 | INFO     | runner:run_job:245 - ************************************************************
+2025-12-27 17:46:06.184 | INFO     | runner:run_job:248 - Step 5: Add partition to final table
+2025-12-27 17:46:06.184 | INFO     | runner:run_job:249 - ************************************************************
+2025-12-27 17:46:06.184 | INFO     | runner:_execute_query:141 - Executing query 
+ALTER TABLE prymal_agent.shipbob_current_inventory
+ADD PARTITION (partition_date = DATE '2025-12-26')
+LOCATION 's3://prymal-ops/staging/prymal_agent/shipbob_current_inventory/partition_date=2025-12-26/';
+
+2025-12-27 17:46:06.383 | INFO     | utils:run_athena_query_no_results:185 - Running query..
+2025-12-27 17:46:07.051 | INFO     | utils:run_athena_query_no_results:202 - Query Succeeded!
+2025-12-27 17:46:07.054 | INFO     | runner:run_job:253 - ************************************************************
+2025-12-27 17:46:07.054 | INFO     | runner:run_job:261 - Job completed successfully
+~/workspace$ 
