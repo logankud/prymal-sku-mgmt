@@ -222,6 +222,14 @@ class JobRunner:
         logger.info("*" * 60)
         #-------------------------------------
 
+        logger.info("Step 2b: Drop staging table if exists (to be recreated)")
+        logger.info('*' * 60)
+        staging_prefix = f"staging/prymal_agent/{self.config.table.name}/{self.config.table.partition_column}={self.run_date}/"
+        delete_s3_data(bucket=self.s3_bucket, prefix=staging_prefix)
+
+        logger.info("*" * 60)
+        #-------------------------------------
+
         logger.info("Step 3: Create staging table")
         logger.info('*' * 60)
 
