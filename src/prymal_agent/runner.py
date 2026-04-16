@@ -220,17 +220,19 @@ class JobRunner:
         delete_s3_data(bucket=self.s3_bucket, prefix=staging_prefix)
 
         logger.info("*" * 60)
+
         #-------------------------------------
 
-        logger.info("Step 2b: Drop staging table if exists (to be recreated)")
+        logger.info("Step 3: Drop staging table")
         logger.info('*' * 60)
-        drop_staging_query = f"DROP TABLE IF EXISTS {self.agent_database}.tmp_{self.config.table.name}_stage;"
-        self._execute_query(drop_staging_query)
+        query = self._populate_sql_template(self._get_drop_staging_template())
+        self._execute_query(query)
 
-        logger.info("*" * 60)
+        logger.info(f"Job completed successfully")
+        
         #-------------------------------------
 
-        logger.info("Step 3: Create staging table")
+        logger.info("Step 4: Create staging table")
         logger.info('*' * 60)
 
         select_query = self._populate_sql_template(
@@ -244,7 +246,7 @@ class JobRunner:
         logger.info("*" * 60)
         #-------------------------------------
 
-        logger.info("Step 4: Drop partition from final table if exists")
+        logger.info("Step 5: Drop partition from final table if exists")
         logger.info('*' * 60)
         query = self._populate_sql_template(
             self._get_drop_partition_template())
@@ -253,17 +255,10 @@ class JobRunner:
         logger.info("*" * 60)
         #-------------------------------------
 
-        logger.info("Step 5: Add partition to final table")
+        logger.info("Step 6: Add partition to final table")
         logger.info('*' * 60)
         query = self._populate_sql_template(self._get_add_partition_template())
         self._execute_query(query)
 
         logger.info("*" * 60)
-        #-------------------------------------
 
-        # logger.info("Step 6: Drop staging table")
-        # logger.info('*' * 60)
-        # query = self._populate_sql_template(self._get_drop_staging_template())
-        # self._execute_query(query)
-
-        logger.info(f"Job completed successfully")

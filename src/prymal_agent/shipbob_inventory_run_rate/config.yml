@@ -1,0 +1,34 @@
+table:
+  name: "shipbob_inventory_run_rate"
+  description: "One record per inventory item in ShipBob, showing a summary of that item as of the date the job was run (ie partition_date). Includes fulfillable quantity plus derived inventory planning metrics (run rate, estimated days on hand, estimated stockout date, and restock point). Use inventory_id to map inventory items to ShipBob order line items. The latest partition_date represents the most current inventory snapshot."
+  partition_column: "partition_date"
+
+columns:
+  - name: "inventory_id"
+    type: "bigint"
+    comment: "ShipBob inventory ID (unique identifier for a physical product across all sales channels, maps to inventory_id in ShipBob order data)."
+
+  - name: "name"
+    type: "string"
+    comment: "Name of the inventory item/product in ShipBob."
+
+  - name: "total_fulfillable_quantity"
+    type: "bigint"
+    comment: "Total inventory quantity available to be fulfilled (after accounting for existing unfilled orders)."
+
+  - name: "est_daily_run_rate"
+    type: "double"
+    comment: "Estimated units sold per day (used for inventory planning and stockout estimation)."
+
+  - name: "est_stock_days_on_hand"
+    type: "double"
+    comment: "Estimated number of days of stock remaining based on current fulfillable quantity and run_rate."
+
+  - name: "estimated_stockout_date"
+    type: "date"
+    comment: "Projected stockout date based on run_rate and current fulfillable quantity."
+
+  - name: "restock_point"
+    type: "bigint"
+    comment: "Inventory threshold (in units) at which the item should be restocked (planning parameter)."
+
