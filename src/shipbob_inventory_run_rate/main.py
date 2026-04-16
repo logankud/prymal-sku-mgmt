@@ -151,6 +151,8 @@ def main():
 
             logger.info(
                 f'No records in shipbob_inventory_details_df for {start_date}')
+            shipbob_inventory_details_df = pd.DataFrame(
+                columns=['inventory_id', 'name', 'total_fulfillable_quantity'])
 
         else:
             # Update data types
