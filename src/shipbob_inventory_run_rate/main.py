@@ -137,10 +137,16 @@ def main():
         # ------
 
         # Athena Query to pull latest inventory data
+        # Fall back to MAX(partition_date) if the exact prior day isn't available
+        # (e.g. during backfill when inventory_details is a snapshot-only table)
         query = f"""
         SELECT * 
         FROM shipbob_inventory_details 
-        WHERE partition_date = DATE('{pd.to_datetime(pd.to_datetime(f"{start_date}") - timedelta(1)).strftime('%Y-%m-%d')}')
+        WHERE partition_date = (
+            SELECT MAX(partition_date)
+            FROM shipbob_inventory_details
+            WHERE partition_date <= DATE('{pd.to_datetime(pd.to_datetime(f"{start_date}") - timedelta(1)).strftime('%Y-%m-%d')}')
+        )
 
         """
 
