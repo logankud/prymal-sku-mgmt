@@ -253,10 +253,10 @@ app.layout = html.Div([
                     html.Label('Select Est. Stock Days On Hand Range:', style={'fontWeight': 'bold'}),
                     dcc.RangeSlider(
                         id='est-stock-days-slider',
-                        min=est_stock_days_on_hand_min,
-                        max=est_stock_days_on_hand_max,
-                        value=[est_stock_days_on_hand_min, est_stock_days_on_hand_max],
-                        marks={i: str(i) for i in range(est_stock_days_on_hand_min, est_stock_days_on_hand_max+1, 10)},
+                        min=0,
+                        max=365,
+                        value=[0, 365],
+                        marks={i: str(i) for i in range(0, 366, 10)},
                         step=1,
                         allowCross=False
                     )
@@ -548,7 +548,11 @@ app.layout = html.Div([
 # Fires on every new page load — refreshes all Athena data fresh
 @app.callback(
     [Output('page-load-trigger', 'children'),
-     Output('product-dropdown', 'options')],
+     Output('product-dropdown', 'options'),
+     Output('est-stock-days-slider', 'min'),
+     Output('est-stock-days-slider', 'max'),
+     Output('est-stock-days-slider', 'value'),
+     Output('est-stock-days-slider', 'marks')],
     Input('url', 'href')
 )
 def on_page_load(href):
@@ -557,7 +561,10 @@ def on_page_load(href):
     (inventory_run_rate_df_cached, merged_df_cached, product_options,
      inventory_details_df_cached, est_stock_days_on_hand_min,
      est_stock_days_on_hand_max) = load_data()
-    return 'loaded', product_options
+    slider_min = int(est_stock_days_on_hand_min) if est_stock_days_on_hand_min is not None else 0
+    slider_max = int(est_stock_days_on_hand_max) if est_stock_days_on_hand_max is not None else 365
+    slider_marks = {i: str(i) for i in range(slider_min, slider_max + 1, max(10, (slider_max - slider_min) // 20))}
+    return 'loaded', product_options, slider_min, slider_max, [slider_min, slider_max], slider_marks
 
 
 # Callback to toggle Stat Cards visibility
