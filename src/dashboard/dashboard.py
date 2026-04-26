@@ -1024,4 +1024,5 @@ def update_product_dropdown(selected_product):
     return dash.no_update
 
 if __name__ == '__main__':
-    app.run_server(host='0.0.0.0', port=8050, debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    app.run_server(host='0.0.0.0', port=port, debug=False)
