@@ -160,9 +160,7 @@ def load_data():
     return (inventory_run_rate_df, merged_df, product_options, inventory_details_df,
             est_stock_days_on_hand_min, est_stock_days_on_hand_max)
 
-# Load data and cache it
-(inventory_run_rate_df_cached, merged_df_cached, product_options,
- inventory_details_df_cached, est_stock_days_on_hand_min, est_stock_days_on_hand_max) = load_data()
+# Data is loaded fresh on each page load via the on_page_load callback below
 
 # Define the legend data
 def get_legend_data():
@@ -198,6 +196,8 @@ def get_color(value):
 
 # Define the app layout with tabs and main content
 app.layout = html.Div([
+    dcc.Location(id='url', refresh=False),
+    html.Div(id='page-load-trigger', style={'display': 'none'}),
     # Store components to keep track of hidden cards and selected product
     dcc.Store(id='hidden-cards-store', data=[]),
     dcc.Store(id='selected-product-store', data=None),
@@ -545,6 +545,21 @@ app.layout = html.Div([
     ])
 ])
 
+# Fires on every new page load — refreshes all Athena data fresh
+@app.callback(
+    [Output('page-load-trigger', 'children'),
+     Output('product-dropdown', 'options')],
+    Input('url', 'href')
+)
+def on_page_load(href):
+    global inventory_run_rate_df_cached, merged_df_cached, product_options
+    global inventory_details_df_cached, est_stock_days_on_hand_min, est_stock_days_on_hand_max
+    (inventory_run_rate_df_cached, merged_df_cached, product_options,
+     inventory_details_df_cached, est_stock_days_on_hand_min,
+     est_stock_days_on_hand_max) = load_data()
+    return 'loaded', product_options
+
+
 # Callback to toggle Stat Cards visibility
 @app.callback(
     Output("stat-cards-container", "style"),
@@ -596,9 +611,10 @@ def toggle_time_series(n_clicks, current_style):
      Output('inventory-status-table', 'children'),
      Output('qty-sold-time-series', 'figure'),
      Output('inventory-on-hand-time-series', 'figure')],
-    [Input('product-dropdown', 'value')]
+    [Input('product-dropdown', 'value'),
+     Input('page-load-trigger', 'children')]
 )
-def update_dashboard(selected_product):
+def update_dashboard(selected_product, _page_load):
     # Use the globally cached data
     global inventory_run_rate_df_cached, merged_df_cached, inventory_details_df_cached
 
@@ -869,15 +885,19 @@ def update_dashboard(selected_product):
     Output('kpi-cards-container', 'children'),
     [Input('tabs', 'value'),
      Input('hidden-cards-store', 'data'),
-     Input('est-stock-days-slider', 'value')],
+     Input('est-stock-days-slider', 'value'),
+     Input('page-load-trigger', 'children')],
 )
-def update_kpi_cards(selected_tab, hidden_cards, est_stock_days_range):
+def update_kpi_cards(selected_tab, hidden_cards, est_stock_days_range, _page_load):
     if selected_tab != 'product-cards':
         # Return empty list if not on the Product Cards Page
         return []
 
     # Use the globally cached data
     global inventory_run_rate_df_cached
+
+    if inventory_run_rate_df_cached is None:
+        return []
 
     # Data preparation
     df = inventory_run_rate_df_cached[['name', 'est_stock_days_on_hand']].copy()
