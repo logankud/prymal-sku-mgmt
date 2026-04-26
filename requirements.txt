@@ -1,4 +1,6 @@
 annotated-types==0.7.0
+dash==2.18.2
+plotly==5.24.1
 bcrypt
 boto3==1.34.136
 botocore==1.34.136
