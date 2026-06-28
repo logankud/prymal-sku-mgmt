@@ -1,0 +1,1 @@
+- [Repo pipeline architecture](repo-pipeline-architecture.md) — 9 GitHub Actions workflows, S3+Athena data lake, backfill patterns per job type

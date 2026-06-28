@@ -3,6 +3,7 @@ import pandas as pd
 from loguru import logger
 import os
 import sys
+import argparse
 
 sys.path.append('src/')  # updating path back to root for importing modules
 
@@ -13,6 +14,16 @@ from models import *
 def main():
 
     logger.info('Running main()')
+
+    parser = argparse.ArgumentParser(
+        description='Extract Katana raw material replenishment status')
+    parser.add_argument(
+        '--partition_date',
+        type=str,
+        required=False,
+        default=None,
+        help='Partition date for output in YYYY-MM-DD format (defaults to today EDT)')
+    args = parser.parse_args()
 
     # ------------------- CONFIGURE ENV VARIABLES -------------------
 
@@ -157,9 +168,10 @@ def main():
                                  aws_secret_access_key=AWS_SECRET_ACCESS_KEY)
 
         # define path to write to
-        today = pd.to_datetime(
+        today = args.partition_date if args.partition_date else pd.to_datetime(
             pd.to_datetime('today') -
             timedelta(hours=4)).strftime('%Y-%m-%d')
+        logger.info(f'Writing to partition_date={today}')
         s3_prefix = f"katana/raw_material_status/partition_date={today}/katana_raw_material_status_{today.replace('-','_')}.csv"
 
         try:

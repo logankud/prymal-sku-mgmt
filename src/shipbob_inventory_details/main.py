@@ -45,6 +45,16 @@ def main():
     if not s3_bucket:
         raise ValueError("AWS_ACCESS_SECRET environment variable is not set")
 
+    parser = argparse.ArgumentParser(
+        description='Extract ShipBob inventory details snapshot')
+    parser.add_argument(
+        '--partition_date',
+        type=str,
+        required=False,
+        default=None,
+        help='Partition date for output in YYYY-MM-DD format (defaults to today EDT)')
+    args = parser.parse_args()
+
     # ------ GET INVENTORY ------
 
     # Get Shipbob Inventory
@@ -83,9 +93,10 @@ def main():
             logger.info(pd.DataFrame(valid_data))
 
             # define path to write to
-            today = pd.to_datetime(
+            today = args.partition_date if args.partition_date else pd.to_datetime(
                 pd.to_datetime('today') -
                 timedelta(hours=4)).strftime('%Y-%m-%d')
+            logger.info(f'Writing to partition_date={today}')
             s3_prefix = f"shipbob/inventory_details/partition_date={today}/shipbob_inventory_details_{today.replace('-','_')}.csv"
 
             try:
