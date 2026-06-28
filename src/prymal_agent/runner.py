@@ -82,7 +82,10 @@ class JobRunner:
         """Load run_date based on provided partition_date"""
 
         if partition_date:
-            run_date = (partition_date).strftime("%Y-%m-%d")
+            if isinstance(partition_date, str):
+                run_date = partition_date
+            else:
+                run_date = partition_date.strftime("%Y-%m-%d")
         else:
             current_ts = datetime.now(pytz.utc)
             run_date = (current_ts - timedelta(hours=24)).strftime("%Y-%m-%d")

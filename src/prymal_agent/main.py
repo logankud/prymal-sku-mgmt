@@ -40,8 +40,8 @@ def main():
 
     logger.info(f"Starting job with args: {args}")
 
-    # Initialize job runner
-    runner = JobRunner(job_dir=args.job_dir)
+    # Initialize job runner (pass partition_date so self.run_date is set correctly)
+    runner = JobRunner(job_dir=args.job_dir, partition_date=args.partition_date)
 
     # Run the job
     runner.run_job(partition_date=args.partition_date)
