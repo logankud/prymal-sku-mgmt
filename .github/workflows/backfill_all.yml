@@ -1,0 +1,140 @@
+name: Backfill All Jobs (Manual Patch)
+
+on:
+  workflow_dispatch:
+    inputs:
+      lookback_days:
+        description: 'Number of days back to check for gaps (default: 30)'
+        required: false
+        default: '30'
+
+jobs:
+  backfill_all:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo code
+        uses: actions/checkout@v3
+
+      - name: Set up Python environment
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.10.14'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run full backfill — Tier 1 (raw API pulls)
+        env:
+          AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_ACCESS_SECRET: ${{ secrets.AWS_ACCESS_SECRET }}
+          SHIPBOB_API_SECRET: ${{ secrets.SHIPBOB_API_SECRET }}
+          SHOPIFY_API_KEY: ${{ secrets.SHOPIFY_API_KEY }}
+          SHOPIFY_API_PW: ${{ secrets.SHOPIFY_API_PW }}
+          SHOPIFY_STORE_URL: ${{ secrets.SHOPIFY_STORE_URL }}
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+          GLUE_DATABASE_NAME: ${{ secrets.GLUE_DATABASE_NAME }}
+          GLUE_DATABASE_NAME_AGENT: ${{ secrets.GLUE_DATABASE_NAME_AGENT }}
+          LOOKBACK: ${{ github.event.inputs.lookback_days }}
+        run: |
+          echo "====== Tier 1: raw API pulls (lookback=${LOOKBACK}d) ======"
+
+          echo "--- shipbob_inventory_details ---"
+          MISSING=$(python3 src/gap_detector.py --table shipbob_inventory_details --date_col partition_date --lookback_days $LOOKBACK 2>/dev/null || true)
+          if [ -n "$MISSING" ]; then
+            for dt in $MISSING; do
+              echo "  backfilling $dt"; python3 src/shipbob_inventory_details/main.py --partition_date $dt
+            done
+          else echo "  no gaps"; fi
+
+          echo "--- shipbob_order_details ---"
+          MISSING=$(python3 src/gap_detector.py --table shipbob_order_details --date_col order_date --lookback_days $LOOKBACK 2>/dev/null || true)
+          if [ -n "$MISSING" ]; then
+            for dt in $MISSING; do
+              echo "  backfilling $dt"; python3 src/shipbob_order_details/main.py --start_date $dt --end_date $dt
+            done
+          else echo "  no gaps"; fi
+
+          echo "--- shopify_active_variant_sku_details ---"
+          MISSING=$(python3 src/gap_detector.py --table shopify_active_variant_sku_details --date_col partition_date --lookback_days $LOOKBACK 2>/dev/null || true)
+          if [ -n "$MISSING" ]; then
+            for dt in $MISSING; do
+              echo "  backfilling $dt"; python3 src/shopify_active_variant_sku_details/main.py --partition_date $dt
+            done
+          else echo "  no gaps"; fi
+
+          echo "--- shopify_orders ---"
+          MISSING=$(python3 src/gap_detector.py --table shopify_orders --lookback_days $LOOKBACK 2>/dev/null || true)
+          if [ -n "$MISSING" ]; then
+            for dt in $MISSING; do
+              echo "  backfilling $dt"; python3 src/shopify_order_details/main.py --start_date $dt --end_date $dt
+            done
+          else echo "  no gaps"; fi
+
+          echo "--- katana_raw_material_status ---"
+          MISSING=$(python3 src/gap_detector.py --table katana_raw_material_status --date_col partition_date --lookback_days $LOOKBACK 2>/dev/null || true)
+          if [ -n "$MISSING" ]; then
+            for dt in $MISSING; do
+              echo "  backfilling $dt"; python3 src/katana_raw_material_status/main.py --partition_date $dt
+            done
+          else echo "  no gaps"; fi
+
+      - name: Run full backfill — Tier 2 (depends on Tier 1)
+        env:
+          AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_ACCESS_SECRET: ${{ secrets.AWS_ACCESS_SECRET }}
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+          GLUE_DATABASE_NAME: ${{ secrets.GLUE_DATABASE_NAME }}
+          LOOKBACK: ${{ github.event.inputs.lookback_days }}
+        run: |
+          echo "====== Tier 2: derived tables (lookback=${LOOKBACK}d) ======"
+
+          echo "--- shipbob_inventory_run_rate ---"
+          MISSING=$(python3 src/gap_detector.py --table shipbob_inventory_run_rate --date_col partition_date --lookback_days $LOOKBACK 2>/dev/null || true)
+          if [ -n "$MISSING" ]; then
+            for dt in $MISSING; do
+              NEXT=$(date -d "$dt + 1 day" +%Y-%m-%d)
+              echo "  backfilling $dt (end=$NEXT)"; python3 src/shipbob_inventory_run_rate/main.py --start_date $dt --end_date $NEXT
+            done
+          else echo "  no gaps"; fi
+
+          echo "--- katana_raw_material_run_rate ---"
+          MISSING=$(python3 src/gap_detector.py --table katana_raw_material_run_rate --date_col partition_date --lookback_days $LOOKBACK 2>/dev/null || true)
+          if [ -n "$MISSING" ]; then
+            for dt in $MISSING; do
+              echo "  backfilling $dt"; python3 src/raw_material_run_rate/main.py --partition_date $dt
+            done
+          else echo "  no gaps"; fi
+
+      - name: Run full backfill — Tier 3 (prymal_agent aggregations)
+        env:
+          AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_ACCESS_SECRET: ${{ secrets.AWS_ACCESS_SECRET }}
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+          GLUE_DATABASE_NAME: ${{ secrets.GLUE_DATABASE_NAME }}
+          GLUE_DATABASE_NAME_AGENT: ${{ secrets.GLUE_DATABASE_NAME_AGENT }}
+          LOOKBACK: ${{ github.event.inputs.lookback_days }}
+        run: |
+          echo "====== Tier 3: prymal_agent aggregations (lookback=${LOOKBACK}d) ======"
+
+          MISSING=$(python3 src/gap_detector.py \
+            --table shipbob_current_inventory \
+            --date_col partition_date \
+            --database $GLUE_DATABASE_NAME_AGENT \
+            --lookback_days $LOOKBACK 2>/dev/null || true)
+
+          if [ -n "$MISSING" ]; then
+            echo "Missing dates: $MISSING"
+            for dt in $MISSING; do
+              echo "  backfilling $dt"
+              python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_retention_by_cohort_month --partition_date $dt
+              python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_daily_order_cnt_by_channel  --partition_date $dt
+              python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_orders_obfuscated           --partition_date $dt
+              python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_current_inventory           --partition_date $dt
+            done
+          else
+            echo "  no gaps"
+          fi
+
+      - run: echo "Backfill complete — job status ${{ job.status }}"
