@@ -27,13 +27,40 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-  
+
+      - name: Auto-backfill missing dates for all prymal_agent sub-jobs
+        env:
+          AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
+          AWS_ACCESS_SECRET: ${{ secrets.AWS_ACCESS_SECRET }}
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+          GLUE_DATABASE_NAME: ${{ secrets.GLUE_DATABASE_NAME }}
+          GLUE_DATABASE_NAME_AGENT: ${{ secrets.GLUE_DATABASE_NAME_AGENT }}
+        run: |
+          MISSING_DATES=$(python3 src/gap_detector.py \
+            --table shipbob_current_inventory \
+            --date_col partition_date \
+            --database $GLUE_DATABASE_NAME_AGENT \
+            --lookback_days 7 2>/dev/null)
+          if [ -n "$MISSING_DATES" ]; then
+            echo "-------- Auto-backfill: missing dates detected: $MISSING_DATES"
+            for dt in $MISSING_DATES; do
+              echo "-------- Backfilling $dt for all sub-jobs"
+              python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_retention_by_cohort_month --partition_date $dt
+              python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_daily_order_cnt_by_channel --partition_date $dt
+              python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_orders_obfuscated --partition_date $dt
+              python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_current_inventory --partition_date $dt
+            done
+          else
+            echo "-------- Auto-backfill: no missing dates in the last 7 days"
+          fi
+
       - name: Run job - shipbob_retention_by_cohort_month
         env:
           AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
           AWS_ACCESS_SECRET: ${{ secrets.AWS_ACCESS_SECRET }}
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
           GLUE_DATABASE_NAME: ${{ secrets.GLUE_DATABASE_NAME }}
+          GLUE_DATABASE_NAME_AGENT: ${{ secrets.GLUE_DATABASE_NAME_AGENT }}
         working-directory: src/prymal_agent/shipbob_retention_by_cohort_month
         run: python main.py
 
@@ -43,6 +70,7 @@ jobs:
           AWS_ACCESS_SECRET: ${{ secrets.AWS_ACCESS_SECRET }}
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
           GLUE_DATABASE_NAME: ${{ secrets.GLUE_DATABASE_NAME }}
+          GLUE_DATABASE_NAME_AGENT: ${{ secrets.GLUE_DATABASE_NAME_AGENT }}
         working-directory: src/prymal_agent/shipbob_daily_order_cnt_by_channel
         run: python main.py
 
@@ -52,6 +80,7 @@ jobs:
           AWS_ACCESS_SECRET: ${{ secrets.AWS_ACCESS_SECRET }}
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
           GLUE_DATABASE_NAME: ${{ secrets.GLUE_DATABASE_NAME }}
+          GLUE_DATABASE_NAME_AGENT: ${{ secrets.GLUE_DATABASE_NAME_AGENT }}
         working-directory: src/prymal_agent/shipbob_orders_obfuscated
         run: python main.py
 
@@ -61,10 +90,8 @@ jobs:
           AWS_ACCESS_SECRET: ${{ secrets.AWS_ACCESS_SECRET }}
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
           GLUE_DATABASE_NAME: ${{ secrets.GLUE_DATABASE_NAME }}
+          GLUE_DATABASE_NAME_AGENT: ${{ secrets.GLUE_DATABASE_NAME_AGENT }}
         working-directory: src/prymal_agent/shipbob_current_inventory
         run: python main.py
 
-
-
       - run: echo "Job status - ${{ job.status }}."
-  
