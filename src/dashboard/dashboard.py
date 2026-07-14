@@ -722,6 +722,21 @@ def update_dashboard(selected_product, _page_load):
     # Filter merged data for the selected product
     product_df = merged_df_cached[merged_df_cached['name'] == selected_product]
 
+    # Fill 0s for dates with no orders so the qty-sold chart shows a continuous
+    # timeline instead of gaps on days with no sales for this product
+    if not product_df.empty:
+        full_dates = pd.date_range(
+            start=product_df['created_date'].min(),
+            end=product_df['created_date'].max(),
+            freq='D'
+        )
+        product_df = (
+            product_df.set_index('created_date')[['inventory_qty']]
+            .reindex(full_dates, fill_value=0)
+            .reset_index()
+            .rename(columns={'index': 'created_date'})
+        )
+
     # Filter inventory_details_df for the selected product
     inventory_details_df = inventory_details_df_cached[inventory_details_df_cached['name'] == selected_product]
 
@@ -849,6 +864,11 @@ def update_dashboard(selected_product, _page_load):
                     line=dict(color='red', dash='dot'),
                 ))
 
+        # Constrain the x-axis to actual data range + 14-day buffer so the
+        # far-future stockout date line doesn't compress all real data to the left
+        inv_x_min = inventory_details_df['partition_date'].min()
+        inv_x_max = inventory_details_df['partition_date'].max() + pd.Timedelta(days=14)
+
         fig2.update_layout(
             title='Inventory On Hand Trend',
             title_font_size=20,
@@ -867,6 +887,7 @@ def update_dashboard(selected_product, _page_load):
                 bordercolor='rgba(0,0,0,0)'
             ),
             xaxis=dict(
+                range=[inv_x_min, inv_x_max],
                 rangeselector=dict(
                     buttons=list([
                         dict(count=7, label='1w', step='day', stepmode='backward'),
