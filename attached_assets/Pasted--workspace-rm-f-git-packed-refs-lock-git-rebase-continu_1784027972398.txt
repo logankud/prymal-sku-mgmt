@@ -1,0 +1,66 @@
+~/workspace$ rm -f .git/packed-refs.lock
+git rebase --continue
+error: cannot lock ref 'REBASE_HEAD': Unable to create '/home/runner/workspace/.git/REBASE_HEAD.lock': File exists.
+
+Another git process seems to be running in this repository, e.g.
+an editor opened by 'git commit'. Please make sure all processes
+are terminated then try again. If it still fails, a git process
+may have crashed in this repository earlier:
+remove the file manually to continue.
+error: cannot lock ref 'REBASE_HEAD': Unable to create '/home/runner/workspace/.git/REBASE_HEAD.lock': File exists.
+
+Another git process seems to be running in this repository, e.g.
+an editor opened by 'git commit'. Please make sure all processes
+are terminated then try again. If it still fails, a git process
+may have crashed in this repository earlier:
+remove the file manually to continue.
+error: cannot lock ref 'REBASE_HEAD': Unable to create '/home/runner/workspace/.git/REBASE_HEAD.lock': File exists.
+
+Another git process seems to be running in this repository, e.g.
+an editor opened by 'git commit'. Please make sure all processes
+are terminated then try again. If it still fails, a git process
+may have crashed in this repository earlier:
+remove the file manually to continue.
+error: cannot lock ref 'REBASE_HEAD': Unable to create '/home/runner/workspace/.git/REBASE_HEAD.lock': File exists.
+
+Another git process seems to be running in this repository, e.g.
+an editor opened by 'git commit'. Please make sure all processes
+are terminated then try again. If it still fails, a git process
+may have crashed in this repository earlier:
+remove the file manually to continue.
+error: cannot lock ref 'REBASE_HEAD': Unable to create '/home/runner/workspace/.git/REBASE_HEAD.lock': File exists.
+
+Another git process seems to be running in this repository, e.g.
+an editor opened by 'git commit'. Please make sure all processes
+are terminated then try again. If it still fails, a git process
+may have crashed in this repository earlier:
+remove the file manually to continue.
+error: cannot lock ref 'REBASE_HEAD': Unable to create '/home/runner/workspace/.git/REBASE_HEAD.lock': File exists.
+
+Another git process seems to be running in this repository, e.g.
+an editor opened by 'git commit'. Please make sure all processes
+are terminated then try again. If it still fails, a git process
+may have crashed in this repository earlier:
+remove the file manually to continue.
+error: The following untracked working tree files would be overwritten by merge:
+    .github/workflows/backfill_all.yml
+Please move or remove them before you merge.
+Aborting
+hint: Could not execute the todo command
+hint:
+hint:     pick 43386e40f53cf8080354ce9cf5a2a5f010862e2c # Add a manual backfill workflow and script to fill data gaps
+hint:
+hint: It has been rescheduled; To edit the command before continuing, please
+hint: edit the todo list first:
+hint:
+hint:     git rebase --edit-todo
+hint:     git rebase --continue
+error: update_ref failed for ref 'REBASE_HEAD': cannot lock ref 'REBASE_HEAD': Unable to create '/home/runner/workspace/.git/REBASE_HEAD.lock': File exists.
+
+Another git process seems to be running in this repository, e.g.
+an editor opened by 'git commit'. Please make sure all processes
+are terminated then try again. If it still fails, a git process
+may have crashed in this repository earlier:
+remove the file manually to continue.
+error: could not update REBASE_HEAD
+~/workspace$ 
