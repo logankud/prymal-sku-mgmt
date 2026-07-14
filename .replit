@@ -16,10 +16,13 @@ localPort = 5000
 externalPort = 80
 
 [[ports]]
+<<<<<<< HEAD
 localPort = 8050
 externalPort = 8080
 
 [[ports]]
+=======
+>>>>>>> 24c1f12 (Saved progress at the end of the loop)
 localPort = 8051
 externalPort = 80
 
@@ -42,6 +45,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
+<<<<<<< HEAD
 args = "ShipBob Tracker"
 
 [[workflows.workflow]]
@@ -56,5 +60,21 @@ waitForPort = 5000
 [workflows.workflow.metadata]
 outputType = "webview"
 
+=======
+args = "Prymal Dashboard"
+
+[[workflows.workflow]]
+name = "Prymal Dashboard"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "PORT=5000 python src/dashboard/dashboard.py"
+waitForPort = 5000
+
+>>>>>>> 24c1f12 (Saved progress at the end of the loop)
 [agent]
 expertMode = true
