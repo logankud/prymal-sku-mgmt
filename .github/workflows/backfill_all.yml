@@ -52,7 +52,8 @@ jobs:
           MISSING=$(python3 src/gap_detector.py --table shipbob_order_details --date_col order_date --lookback_days $LOOKBACK 2>/dev/null || true)
           if [ -n "$MISSING" ]; then
             for dt in $MISSING; do
-              echo "  backfilling $dt"; python3 src/shipbob_order_details/main.py --start_date $dt --end_date $dt
+              NEXT=$(date -d "$dt + 1 day" +%Y-%m-%d)
+              echo "  backfilling $dt (end=$NEXT)"; python3 src/shipbob_order_details/main.py --start_date $dt --end_date $NEXT
             done
           else echo "  no gaps"; fi
 

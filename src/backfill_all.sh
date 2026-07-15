@@ -37,8 +37,10 @@ backfill_partition() {
     fi
 }
 
-# ── helper: backfill a --start_date/--end_date inclusive job ─────────────────
-backfill_inclusive() {
+# ── helper: backfill a --start_date/--end_date job where API needs end=dt+1 ──
+# ShipBob API treats StartDate/EndDate as midnight boundaries; passing the same
+# date for both produces a zero-second window and returns 0 orders.
+backfill_exclusive() {
     local table=$1
     local date_col=$2
     local script=$3
@@ -47,8 +49,9 @@ backfill_inclusive() {
     if [ -n "$MISSING" ]; then
         echo "  Missing dates: $MISSING"
         for dt in $MISSING; do
-            echo "  → backfilling $dt"
-            python3 "$script" --start_date "$dt" --end_date "$dt"
+            NEXT=$(date -d "$dt + 1 day" +%Y-%m-%d)
+            echo "  → backfilling $dt (end_date=$NEXT)"
+            python3 "$script" --start_date "$dt" --end_date "$NEXT"
         done
     else
         echo "  No gaps found."
@@ -115,7 +118,7 @@ backfill_agent() {
 
 # Tier 1 — raw API pulls (no dependencies between each other)
 backfill_partition   shipbob_inventory_details          src/shipbob_inventory_details/main.py
-backfill_inclusive   shipbob_order_details   order_date src/shipbob_order_details/main.py
+backfill_exclusive   shipbob_order_details   order_date src/shipbob_order_details/main.py
 backfill_partition   shopify_active_variant_sku_details src/shopify_active_variant_sku_details/main.py
 backfill_shopify_orders
 backfill_partition   katana_raw_material_status         src/katana_raw_material_status/main.py

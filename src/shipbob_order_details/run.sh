@@ -10,8 +10,11 @@ if [[ $# -eq 0 ]]; then
     if [ -n "$MISSING_DATES" ]; then
         echo "-------- Auto-backfill: missing dates detected: $MISSING_DATES"
         for dt in $MISSING_DATES; do
-            echo "-------- Backfilling $dt"
-            python3 src/shipbob_order_details/main.py --start_date $dt --end_date $dt
+            # ShipBob API treats StartDate/EndDate as midnight boundaries, so
+            # end_date must be dt+1 to cover the full day (same as daily job default)
+            NEXT=$(date -d "$dt + 1 day" +%Y-%m-%d)
+            echo "-------- Backfilling $dt (end_date=$NEXT)"
+            python3 src/shipbob_order_details/main.py --start_date $dt --end_date $NEXT
         done
     else
         echo "-------- Auto-backfill: no missing dates in the last 7 days"
