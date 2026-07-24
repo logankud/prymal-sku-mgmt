@@ -286,6 +286,9 @@ def run_athena_query(query: str, database: str, region: str, s3_bucket: str):
 
                 if state == 'FAILED':
                     logger.error('Query Failed!')
+                    failure_reason = response['QueryExecution']['Status'].get('StateChangeReason', 'Unknown reason')
+                    logger.error(f'Athena failure reason: {failure_reason}')
+                    return None
                 elif state == 'SUCCEEDED':
                     logger.info('Query Succeeded!')
 

@@ -37,6 +37,13 @@ def load_data():
     inventory_run_rate_df = run_athena_query(query=inventory_query, database=GLUE_DATABASE, region=REGION,
                                              s3_bucket=S3_BUCKET)
 
+    if inventory_run_rate_df is None:
+        print("[WARNING] inventory_run_rate query failed — using empty DataFrame")
+        inventory_run_rate_df = pd.DataFrame(columns=[
+            'inventory_id', 'name', 'run_rate', 'estimated_stockout_date',
+            'restock_point', 'est_stock_days_on_hand', 'partition_date'
+        ])
+
     # Fetch order details data for the past 90 days
     order_details_query = """
     SELECT 
@@ -53,6 +60,10 @@ def load_data():
     """
     order_details_df = run_athena_query(query=order_details_query, database=GLUE_DATABASE, region=REGION,
                                         s3_bucket=S3_BUCKET)
+
+    if order_details_df is None:
+        print("[WARNING] order_details query failed — using empty DataFrame")
+        order_details_df = pd.DataFrame(columns=['created_date', 'inventory_name', 'inventory_id', 'inventory_qty'])
 
     # Convert dates to datetime and data types
     order_details_df['created_date'] = pd.to_datetime(order_details_df['created_date'])
@@ -110,6 +121,10 @@ def load_data():
     """
     inventory_details_df = run_athena_query(query=inventory_details_query, database=GLUE_DATABASE, region=REGION,
                                             s3_bucket=S3_BUCKET)
+
+    if inventory_details_df is None:
+        print("[WARNING] inventory_details query failed — using empty DataFrame")
+        inventory_details_df = pd.DataFrame(columns=['inventory_id', 'partition_date', 'total_fulfillable_quantity'])
 
     # Convert dates to datetime and data types
     inventory_details_df['partition_date'] = pd.to_datetime(inventory_details_df['partition_date'])
