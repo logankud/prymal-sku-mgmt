@@ -52,7 +52,7 @@ def load_data():
         inventory_id,
         SUM(inventory_qty) as inventory_qty
     FROM shipbob_order_details 
-    WHERE created_date >= date_add('day', -90, current_date)
+    WHERE order_date >= date_add('day', -90, current_date)
     GROUP BY DATE(created_date),
     inventory_name,
     inventory_id
