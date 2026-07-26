@@ -14,6 +14,16 @@ deploymentTarget = "autoscale"
 localPort = 5000
 externalPort = 80
 
+[[ports]]
+localPort = 8050
+description = "Dash app port"
+exposeLocalhost = true
+
+[[ports]]
+localPort = 8501
+description = "Streamlit default port"
+exposeLocalhost = true
+
 [auth]
 pageEnabled = false
 buttonEnabled = false
