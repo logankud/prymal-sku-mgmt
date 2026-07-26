@@ -1,0 +1,46 @@
+-- 04_daily_units_sold_by_sku.sql
+-- Question it answers: How many units of each protein creamer SKU
+-- (flavor/size variant) sold per day? Returned at daily grain,
+-- unaggregated, so it can be rolled up to weekly/monthly/all-time as
+-- needed (pie chart of all-time SKU mix, monthly trend line, etc.)
+-- without re-querying Athena each time. Used for Slide 4.
+--
+-- TABLE: shipbob_all_line_item_obfuscated. Key notes:
+--   - This table's only built-in date column is `order_month` (already
+--     truncated to monthly grain). Daily grain comes from `created_date`
+--     instead — confirmed by Logan as the true order-level timestamp.
+--     Cast it down to a plain date for daily grouping.
+--   - `inventory_qty` is a STRING on this table, not a number — cast
+--     before summing. Using TRY_CAST defensively so one bad/blank value
+--     doesn't fail the whole query.
+--   - snapshot_date: confirmed by Logan — snapshots are taken daily, but
+--     this table is a VIEW that already exposes only the latest
+--     snapshot at a time. No additional filtering needed. Quick sanity
+--     check if ever in doubt: `SELECT COUNT(DISTINCT snapshot_date)
+--     FROM shipbob_all_line_item_obfuscated` — should return 1.
+--   - No plain customer_email — only customer_hash / customer_email_masked
+--     (obfuscated). Fine for this product-level query, but this table
+--     CANNOT support the cohort/retention queries elsewhere in this
+--     skill without a way to link back to a real customer identity.
+--
+-- Scope: protein creamer products only (same %Protein% filter + taste
+-- tester / scoop exclusions used everywhere else in this skill), on or
+-- after the Nov 1, 2025 launch date.
+--
+-- Launch-date cutoff: 2025-11-01 is Prymal's official protein creamer
+-- launch date (confirmed by Logan) — fixed constant, not a default.
+-- STATUS: drafted, ready to run.
+
+SELECT
+  CAST(created_date AS DATE) AS order_day,
+  inventory_name,
+  SUM(TRY_CAST(inventory_qty AS BIGINT)) AS units_sold
+FROM shipbob_all_line_item_obfuscated
+WHERE created_date >= TIMESTAMP '2025-11-01'
+  AND inventory_name LIKE '%Protein%'
+  AND inventory_name NOT IN (
+    'Founding Taste Testers Protein Creamer',
+    'Protein Creamer Premium Measuring Scoop'
+  )
+GROUP BY CAST(created_date AS DATE), inventory_name
+ORDER BY order_day, inventory_name;
