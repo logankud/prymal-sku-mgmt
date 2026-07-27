@@ -36,22 +36,26 @@ jobs:
           GLUE_DATABASE_NAME: ${{ secrets.GLUE_DATABASE_NAME }}
           GLUE_DATABASE_NAME_AGENT: ${{ secrets.GLUE_DATABASE_NAME_AGENT }}
         run: |
-          MISSING_DATES=$(python3 src/gap_detector.py \
-            --table shipbob_current_inventory \
-            --date_col partition_date \
-            --database $GLUE_DATABASE_NAME_AGENT \
-            --lookback_days 7 2>/dev/null)
-          if [ -n "$MISSING_DATES" ]; then
-            echo "-------- Auto-backfill: missing dates detected: $MISSING_DATES"
-            for dt in $MISSING_DATES; do
-              echo "-------- Backfilling $dt for all sub-jobs"
-              python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_retention_by_cohort_month --partition_date $dt
-              python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_daily_order_cnt_by_channel --partition_date $dt
-              python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_orders_obfuscated --partition_date $dt
-              python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_current_inventory --partition_date $dt
-            done
+          if [ -z "$GLUE_DATABASE_NAME_AGENT" ]; then
+            echo "-------- WARNING: GLUE_DATABASE_NAME_AGENT is not set — skipping auto-backfill"
           else
-            echo "-------- Auto-backfill: no missing dates in the last 7 days"
+            MISSING_DATES=$(python3 src/gap_detector.py \
+              --table shipbob_current_inventory \
+              --date_col partition_date \
+              --database $GLUE_DATABASE_NAME_AGENT \
+              --lookback_days 7 2>/dev/null || true)
+            if [ -n "$MISSING_DATES" ]; then
+              echo "-------- Auto-backfill: missing dates detected: $MISSING_DATES"
+              for dt in $MISSING_DATES; do
+                echo "-------- Backfilling $dt for all sub-jobs"
+                python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_retention_by_cohort_month --partition_date $dt
+                python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_daily_order_cnt_by_channel --partition_date $dt
+                python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_orders_obfuscated --partition_date $dt
+                python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_current_inventory --partition_date $dt
+              done
+            else
+              echo "-------- Auto-backfill: no missing dates in the last 7 days"
+            fi
           fi
 
       - name: Run job - shipbob_retention_by_cohort_month
