@@ -140,13 +140,13 @@ def main():
         # available (e.g. during backfill when inventory_details is a
         # snapshot-only table).
         #
-        # Resolve the partition first and inline it below. Expressing this as
-        # `WHERE partition_date = (SELECT MAX(...))` stops Athena pruning
-        # partitions, so it scans the whole table and gets cancelled once that
-        # exceeds the workgroup's bytes-scanned limit.
+        # Resolve the partition from the Glue catalog and inline it below.
+        # Asking Athena for it - whether as a subquery or as MAX(partition_date)
+        # - reads data files, and on this table that exceeds the workgroup's
+        # bytes-scanned limit and gets the query cancelled.
         cutoff = (pd.to_datetime(start_date) - timedelta(1)).strftime('%Y-%m-%d')
         snapshot_date = latest_partition('shipbob_inventory_details', database,
-                                         region, s3_bucket, on_or_before=cutoff)
+                                         region, on_or_before=cutoff)
         logger.info(f'Using inventory snapshot partition: {snapshot_date}')
 
         if snapshot_date is None:

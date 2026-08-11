@@ -358,44 +358,65 @@ def run_athena_query(query: str, database: str, region: str, s3_bucket: str,
                                f'Query was:\n{query.strip()}') from e
 
 
-def latest_partition(table: str, database: str, region: str, s3_bucket: str,
+def latest_partition(table: str, database: str, region: str,
                      column: str = 'partition_date',
                      on_or_before: str = None):
     """Return the most recent partition value for a table, or None if there is none.
 
+    Reads the partition list straight from the Glue Data Catalog. This is the
+    only way to get it for free: Athena bills by bytes scanned, and
+
+        SELECT MAX(partition_date) FROM t WHERE partition_date <= DATE(...)
+
+    still reads data files rather than being answered from metadata, so on a
+    table with enough daily partitions it trips the workgroup's bytes-scanned
+    limit and Athena cancels the query. Glue has no such notion.
+
     Use this and inline the result as a literal rather than writing
-
-        WHERE partition_date = (SELECT MAX(partition_date) FROM t)
-
-    Athena cannot resolve that subquery at planning time, so it cannot prune
-    partitions: it reads every partition of the table and filters afterwards.
-    On a table with a few hundred daily partitions that is enough to trip a
-    workgroup's bytes-scanned limit, and Athena cancels the query.
-
-    This query touches only the partition column, so Athena answers it from the
-    Glue metastore and scans effectively nothing.
+    `WHERE partition_date = (SELECT MAX(partition_date) FROM t)`, which also
+    stops Athena pruning partitions and scans the whole table.
 
     Args:
         table (str): Table to inspect
         database (str): Glue database
         region (str): AWS region
-        s3_bucket (str): Bucket for Athena query results
         column (str): Partition column name
         on_or_before (str): Optional 'YYYY-MM-DD' upper bound
 
     Returns:
         (str | None): Partition value as 'YYYY-MM-DD', or None if no partition matches
+
+    Raises:
+        ValueError: if the table is not partitioned on `column`
     """
-    predicate = f"WHERE {column} <= DATE('{on_or_before}')" if on_or_before else ''
-    query = f'SELECT MAX({column}) AS latest FROM {table} {predicate}'
+    glue_client = boto3.client('glue',
+                               region_name=region,
+                               aws_access_key_id=AWS_ACCESS_KEY_ID,
+                               aws_secret_access_key=AWS_SECRET_ACCESS_KEY)
 
-    df = run_athena_query(query, database, region, s3_bucket)
+    table_meta = glue_client.get_table(DatabaseName=database, Name=table)['Table']
+    partition_keys = [key['Name'] for key in table_meta.get('PartitionKeys', [])]
 
-    if len(df) == 0:
-        return None
+    if column not in partition_keys:
+        raise ValueError(
+            f"{database}.{table} is not partitioned on '{column}' "
+            f"(partition keys: {partition_keys or 'none'})")
 
-    value = df.iloc[0]['latest']
-    return None if pd.isna(value) else str(value)
+    position = partition_keys.index(column)
+
+    values = []
+    paginator = glue_client.get_paginator('get_partitions')
+    for page in paginator.paginate(DatabaseName=database, TableName=table):
+        values.extend(partition['Values'][position]
+                      for partition in page['Partitions'])
+
+    # Partition values are strings; 'YYYY-MM-DD' sorts correctly as text.
+    if on_or_before:
+        values = [value for value in values if value <= on_or_before]
+
+    logger.info(f'{database}.{table}: {len(values)} partition(s) considered')
+
+    return max(values) if values else None
 
 
 def validate_dataframe(
