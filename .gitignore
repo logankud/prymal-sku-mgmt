@@ -1,3 +1,7 @@
+.venv/
+.pytest_cache/
+dryrun/
+__pycache__/
 *.ipynb
 notebooks/*
 *.csv

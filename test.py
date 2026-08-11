@@ -1,25 +1,42 @@
-import boto3
-import os
+#!/usr/bin/env python3
+"""Preflight check for the ShipBob API credentials and version.
 
+Confirms the PAT authenticates against the pinned API version and that both
+inventory endpoints return data, without writing anything to S3 or Athena.
+
+    SHIPBOB_API_SECRET=... python3 test.py
+"""
+import os
 import sys
 
 sys.path.append('src/')  # updating path back to root for importing modules
 
-from utils import *
-from models import *
+from shipbob.client import API_VERSION, ShipBobClient, ShipBobError
+from shipbob.extract import fetch_inventory
 
 
-# Fetch AWS credentials from environment variables
-AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY')
-AWS_SECRET_ACCESS_KEY = os.getenv('AWS_ACCESS_SECRET')
+def main():
+    token = os.getenv('SHIPBOB_API_SECRET')
+    if not token:
+        sys.exit('SHIPBOB_API_SECRET environment variable is not set')
+
+    client = ShipBobClient(token)
+    print(f'Checking ShipBob API version {API_VERSION}...')
+
+    try:
+        channels = client.get('channel').get('items') or []
+    except ShipBobError as error:
+        sys.exit(f'Authentication failed: {error}')
+
+    for channel in channels:
+        print(f"  channel {channel.get('id')}: {channel.get('name')} "
+              f"scopes={','.join(channel.get('scopes') or [])}")
+
+    inventory = fetch_inventory(client)
+    print(f'\n{len(inventory)} inventory item(s), '
+          f"{int(inventory['total_fulfillable_quantity'].sum())} units fulfillable")
+    print(inventory.head(10).to_string(index=False))
 
 
-# Get Shipbob API secret
-shipbob_api_secret = os.getenv('SHIPBOB_API_SECRET')
-
-
-product_to_inventory_df = list_all_shipbob_products(shipbob_api_secret)
-
-product_to_inventory_df.to_csv('products_to_inventory.csv',index=False)
-
-print(product_to_inventory_df.loc[product_to_inventory_df['product_id'] ==24550])
+if __name__ == '__main__':
+    main()
