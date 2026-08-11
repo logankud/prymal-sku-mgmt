@@ -240,7 +240,12 @@ def run_athena_query_no_results(bucket: str, query: str, database: str,
         raise
 
 
-def run_athena_query(query: str, database: str, region: str, s3_bucket: str):
+class AthenaQueryError(RuntimeError):
+    """An Athena query did not complete successfully."""
+
+
+def run_athena_query(query: str, database: str, region: str, s3_bucket: str,
+                     poll_seconds: float = 1.0, sleep=time.sleep):
     """Function to execute an athena query & return results csv as a dataframe
 
     Args:
@@ -248,8 +253,14 @@ def run_athena_query(query: str, database: str, region: str, s3_bucket: str):
         database (str): The Glue database to be queried
         region (str): The AWSregion to be queried
         s3_bucket (str) : S3 bucket name for query results
+        poll_seconds (float): Delay between status checks
+        sleep (callable): Injected for tests
     Returns:
         (pd.DataFrame): The results of the query as a dataframe
+
+    Raises:
+        AthenaQueryError: if the query fails, is cancelled, or the request is
+            rejected. Never returns None - callers call len() on the result.
     """
 
     # Initialize Athena client
@@ -271,26 +282,27 @@ def run_athena_query(query: str, database: str, region: str, s3_bucket: str):
         query_execution_id = response['QueryExecutionId']
 
         # Wait for the query to complete
-        state = 'RUNNING'
         logger.info(f'Running query..')
 
-        while (state in ['RUNNING', 'QUEUED']):
-            response = athena_client.get_query_execution(
-                QueryExecutionId=query_execution_id)
+        while True:
+            status = athena_client.get_query_execution(
+                QueryExecutionId=query_execution_id)['QueryExecution']['Status']
+            state = status['State']
 
-            if 'QueryExecution' in response and 'Status' in response[
-                    'QueryExecution'] and 'State' in response[
-                        'QueryExecution']['Status']:
-                # Get currentstate
-                state = response['QueryExecution']['Status']['State']
+            if state == 'SUCCEEDED':
+                logger.info('Query Succeeded!')
+                break
 
-                if state == 'FAILED':
-                    logger.error('Query Failed!')
-                    failure_reason = response['QueryExecution']['Status'].get('StateChangeReason', 'Unknown reason')
-                    logger.error(f'Athena failure reason: {failure_reason}')
-                    return None
-                elif state == 'SUCCEEDED':
-                    logger.info('Query Succeeded!')
+            # FAILED, CANCELLED, or any future terminal state. Raise rather
+            # than returning None: callers do len(df) on the result, so a
+            # swallowed error surfaces as an unrelated TypeError.
+            if state not in ('RUNNING', 'QUEUED'):
+                raise AthenaQueryError(
+                    f'Athena query {query_execution_id} {state}: '
+                    f"{status.get('StateChangeReason', 'no reason given')}\n"
+                    f'Query was:\n{query.strip()}')
+
+            sleep(poll_seconds)
 
         # OBTAIN DATA
 
@@ -333,37 +345,57 @@ def run_athena_query(query: str, database: str, region: str, s3_bucket: str):
 
         return results_df
 
-    except ParamValidationError as e:
-        logger.error(f"Validation Error (potential SQL query issue): {e}")
-        # Handle invalid parameters in the request, such as an invalid SQL query
-
-    except WaiterError as e:
-        logger.error(f"Waiter Error: {e}")
-        # Handle errors related to waiting for query execution
-
     except ClientError as e:
-        error_code = e.response['Error']['Code']
-        error_message = e.response['Error']['Message']
+        # InvalidRequestException here usually means bad SQL, or asking for the
+        # results of a query that never reached SUCCEEDED.
+        error = e.response['Error']
+        raise AthenaQueryError(
+            f"Athena request failed ({error['Code']}): {error['Message']}\n"
+            f'Query was:\n{query.strip()}') from e
 
-        if error_code == 'InvalidRequestException':
-            logger.error(f"Invalid Request Exception: {error_message}")
-            # Handle issues with the Athena request, such as invalid SQL syntax
+    except (ParamValidationError, WaiterError) as e:
+        raise AthenaQueryError(f'Athena request rejected: {e}\n'
+                               f'Query was:\n{query.strip()}') from e
 
-        elif error_code == 'ResourceNotFoundException':
-            logger.error(f"Resource Not Found Exception: {error_message}")
-            # Handle cases where the database or query execution does not exist
 
-        elif error_code == 'AccessDeniedException':
-            logger.error(f"Access Denied Exception: {error_message}")
-            # Handle cases where the IAM role does not have sufficient permissions
+def latest_partition(table: str, database: str, region: str, s3_bucket: str,
+                     column: str = 'partition_date',
+                     on_or_before: str = None):
+    """Return the most recent partition value for a table, or None if there is none.
 
-        else:
-            logger.error(f"Athena Error: {error_code} - {error_message}")
-            # Handle other Athena-related errors
+    Use this and inline the result as a literal rather than writing
 
-    except Exception as e:
-        logger.error(f"Other Exception: {str(e)}")
-        # Handle any other unexpected exceptions
+        WHERE partition_date = (SELECT MAX(partition_date) FROM t)
+
+    Athena cannot resolve that subquery at planning time, so it cannot prune
+    partitions: it reads every partition of the table and filters afterwards.
+    On a table with a few hundred daily partitions that is enough to trip a
+    workgroup's bytes-scanned limit, and Athena cancels the query.
+
+    This query touches only the partition column, so Athena answers it from the
+    Glue metastore and scans effectively nothing.
+
+    Args:
+        table (str): Table to inspect
+        database (str): Glue database
+        region (str): AWS region
+        s3_bucket (str): Bucket for Athena query results
+        column (str): Partition column name
+        on_or_before (str): Optional 'YYYY-MM-DD' upper bound
+
+    Returns:
+        (str | None): Partition value as 'YYYY-MM-DD', or None if no partition matches
+    """
+    predicate = f"WHERE {column} <= DATE('{on_or_before}')" if on_or_before else ''
+    query = f'SELECT MAX({column}) AS latest FROM {table} {predicate}'
+
+    df = run_athena_query(query, database, region, s3_bucket)
+
+    if len(df) == 0:
+        return None
+
+    value = df.iloc[0]['latest']
+    return None if pd.isna(value) else str(value)
 
 
 def validate_dataframe(
