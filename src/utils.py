@@ -358,6 +358,46 @@ def run_athena_query(query: str, database: str, region: str, s3_bucket: str,
                                f'Query was:\n{query.strip()}') from e
 
 
+def latest_partition(table: str, database: str, region: str, s3_bucket: str,
+                     column: str = 'partition_date',
+                     on_or_before: str = None):
+    """Return the most recent partition value for a table, or None if there is none.
+
+    Use this and inline the result as a literal rather than writing
+
+        WHERE partition_date = (SELECT MAX(partition_date) FROM t)
+
+    Athena cannot resolve that subquery at planning time, so it cannot prune
+    partitions: it reads every partition of the table and filters afterwards.
+    On a table with a few hundred daily partitions that is enough to trip a
+    workgroup's bytes-scanned limit, and Athena cancels the query.
+
+    This query touches only the partition column, so Athena answers it from the
+    Glue metastore and scans effectively nothing.
+
+    Args:
+        table (str): Table to inspect
+        database (str): Glue database
+        region (str): AWS region
+        s3_bucket (str): Bucket for Athena query results
+        column (str): Partition column name
+        on_or_before (str): Optional 'YYYY-MM-DD' upper bound
+
+    Returns:
+        (str | None): Partition value as 'YYYY-MM-DD', or None if no partition matches
+    """
+    predicate = f"WHERE {column} <= DATE('{on_or_before}')" if on_or_before else ''
+    query = f'SELECT MAX({column}) AS latest FROM {table} {predicate}'
+
+    df = run_athena_query(query, database, region, s3_bucket)
+
+    if len(df) == 0:
+        return None
+
+    value = df.iloc[0]['latest']
+    return None if pd.isna(value) else str(value)
+
+
 def validate_dataframe(
         df: pd.DataFrame, model: Type[BaseModel]
 ) -> Tuple[List[BaseModel], List[Tuple[dict, str]]]:

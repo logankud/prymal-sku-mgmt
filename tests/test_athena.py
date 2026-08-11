@@ -17,15 +17,19 @@ ARGS = ('SELECT * FROM shipbob_inventory_details', 'prymal', 'us-east-1', 'bucke
 class FakeAthena:
     """Stands in for boto3's Athena client with a scripted sequence of states."""
 
-    def __init__(self, states, reason=None, rows=None, error=None):
+    def __init__(self, states, reason=None, rows=None, error=None,
+                 columns=('id', 'name')):
         self.states = list(states)
         self.reason = reason
         self.rows = rows if rows is not None else []
         self.error = error
+        self.columns = list(columns)
         self.polls = 0
+        self.queries = []
 
     def start_query_execution(self, **kwargs):
         self.query = kwargs['QueryString']
+        self.queries.append(self.query)
         return {'QueryExecutionId': 'qid-1'}
 
     def get_query_execution(self, **kwargs):
@@ -39,12 +43,13 @@ class FakeAthena:
     def get_query_results(self, **kwargs):
         if self.error:
             raise self.error
-        header = [{'Data': [{'VarCharValue': 'id'}, {'VarCharValue': 'name'}]}]
-        body = [{'Data': [{'VarCharValue': str(i)}, {'VarCharValue': n}]}
-                for i, n in self.rows]
+        header = [{'Data': [{'VarCharValue': c} for c in self.columns]}]
+        body = [{'Data': [{'VarCharValue': str(v)} if v is not None else {}
+                          for v in row]} for row in self.rows]
         return {
             'ResultSet': {
-                'ResultSetMetadata': {'ColumnInfo': [{'Name': 'id'}, {'Name': 'name'}]},
+                'ResultSetMetadata': {
+                    'ColumnInfo': [{'Name': c} for c in self.columns]},
                 'Rows': header + body,
             }
         }
@@ -133,3 +138,66 @@ def test_empty_result_set_is_an_empty_frame_not_none(athena_client):
 
     assert isinstance(df, pd.DataFrame)
     assert len(df) == 0
+
+
+# --------------------------------------------------------------------------
+# latest_partition - resolve the partition before reading it
+# --------------------------------------------------------------------------
+
+def test_latest_partition_returns_the_max_value(athena_client):
+    fake = athena_client(FakeAthena(['SUCCEEDED'], columns=['latest'],
+                                    rows=[['2026-08-10']]))
+
+    assert utils.latest_partition('shipbob_inventory_details', 'prymal',
+                                  'us-east-1', 'bucket') == '2026-08-10'
+
+
+def test_latest_partition_queries_only_the_partition_column(athena_client):
+    """This is the whole point: a query touching only partition columns is
+    answered from the metastore and scans ~0 bytes, unlike the correlated
+    subquery it replaces."""
+    fake = athena_client(FakeAthena(['SUCCEEDED'], columns=['latest'],
+                                    rows=[['2026-08-10']]))
+
+    utils.latest_partition('shipbob_inventory_details', 'prymal', 'us-east-1',
+                           'bucket')
+
+    sql = ' '.join(fake.queries[0].split())
+    assert sql == ('SELECT MAX(partition_date) AS latest '
+                   'FROM shipbob_inventory_details')
+    assert 'SELECT *' not in sql
+
+
+def test_latest_partition_applies_an_upper_bound(athena_client):
+    fake = athena_client(FakeAthena(['SUCCEEDED'], columns=['latest'],
+                                    rows=[['2026-07-26']]))
+
+    utils.latest_partition('shipbob_inventory_details', 'prymal', 'us-east-1',
+                           'bucket', on_or_before='2026-07-26')
+
+    assert "WHERE partition_date <= DATE('2026-07-26')" in fake.queries[0]
+
+
+def test_latest_partition_is_none_when_no_partition_matches(athena_client):
+    """MAX() over nothing is SQL NULL, which Athena returns as a missing value."""
+    athena_client(FakeAthena(['SUCCEEDED'], columns=['latest'], rows=[[None]]))
+
+    assert utils.latest_partition('shipbob_inventory_details', 'prymal',
+                                  'us-east-1', 'bucket') is None
+
+
+def test_latest_partition_is_none_when_the_table_is_empty(athena_client):
+    athena_client(FakeAthena(['SUCCEEDED'], columns=['latest'], rows=[]))
+
+    assert utils.latest_partition('shipbob_inventory_details', 'prymal',
+                                  'us-east-1', 'bucket') is None
+
+
+def test_latest_partition_supports_other_partition_columns(athena_client):
+    fake = athena_client(FakeAthena(['SUCCEEDED'], columns=['latest'],
+                                    rows=[['2026-08-10']]))
+
+    utils.latest_partition('shipbob_order_details', 'prymal', 'us-east-1',
+                           'bucket', column='order_date')
+
+    assert 'MAX(order_date)' in fake.queries[0]

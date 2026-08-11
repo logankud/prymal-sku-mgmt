@@ -136,22 +136,29 @@ def main():
         #  Shipbob Inventory Data
         # ------
 
-        # Athena Query to pull latest inventory data
-        # Fall back to MAX(partition_date) if the exact prior day isn't available
-        # (e.g. during backfill when inventory_details is a snapshot-only table)
-        query = f"""
-        SELECT * 
-        FROM shipbob_inventory_details 
-        WHERE partition_date = (
-            SELECT MAX(partition_date)
+        # Fall back to the most recent partition if the exact prior day isn't
+        # available (e.g. during backfill when inventory_details is a
+        # snapshot-only table).
+        #
+        # Resolve the partition first and inline it below. Expressing this as
+        # `WHERE partition_date = (SELECT MAX(...))` stops Athena pruning
+        # partitions, so it scans the whole table and gets cancelled once that
+        # exceeds the workgroup's bytes-scanned limit.
+        cutoff = (pd.to_datetime(start_date) - timedelta(1)).strftime('%Y-%m-%d')
+        snapshot_date = latest_partition('shipbob_inventory_details', database,
+                                         region, s3_bucket, on_or_before=cutoff)
+        logger.info(f'Using inventory snapshot partition: {snapshot_date}')
+
+        if snapshot_date is None:
+            shipbob_inventory_details_df = pd.DataFrame()
+        else:
+            query = f"""
+            SELECT *
             FROM shipbob_inventory_details
-            WHERE partition_date <= DATE('{pd.to_datetime(pd.to_datetime(f"{start_date}") - timedelta(1)).strftime('%Y-%m-%d')}')
-        )
-
-        """
-
-        shipbob_inventory_details_df = run_athena_query(
-            query, database, region, s3_bucket)
+            WHERE partition_date = DATE('{snapshot_date}')
+            """
+            shipbob_inventory_details_df = run_athena_query(
+                query, database, region, s3_bucket)
 
         if len(shipbob_inventory_details_df) == 0:
 
