@@ -23,7 +23,7 @@ CREATE EXTERNAL TABLE IF NOT EXISTS prymal_agent.shipbob_all_line_item_obfuscate
   created_date                 date   COMMENT 'date that the order was created'
 )
 STORED AS PARQUET
-LOCATION 's3://prymal-ops/prymal_agent/shipbob/all_line_item_obfuscated/run_date=${RUN_DATE}/'
+LOCATION 's3://${S3_BUCKET}/prymal_agent/shipbob/all_line_item_obfuscated/run_date=${RUN_DATE}/'
 TBLPROPERTIES (
   'comment'='One record per line item per order for all Shipbob orders as of created_date (the date the order was placed). Partitioned by purchase_month. Obfuscated to protect customer data. Full snapshot taken once per day, so all historic data is contained within the the entirety of this table.  The latest snapshot date contains data through ${RUN_DATE}'
 );
