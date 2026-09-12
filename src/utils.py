@@ -419,6 +419,164 @@ def latest_partition(table: str, database: str, region: str,
     return max(values) if values else None
 
 
+def coerce_frame_to_ddl(df: pd.DataFrame, columns: List[Tuple[str, str]]) -> pd.DataFrame:
+    """Render each column the way its declared Glue type can be read back.
+
+    Two pandas defaults write values Athena reads back as NULL rather than
+    rejecting, so both are corrected here:
+
+    bigint    - a column containing a null is upcast to float64 and written as
+                '111.0'. Nullable Int64 writes '111' and an empty field.
+    timestamp - to_csv omits the time component when every value is midnight,
+                writing a bare date that a Hive timestamp cannot parse.
+    """
+    df = df.copy()
+    for name, type_ in columns:
+        if name not in df.columns:
+            continue
+        if type_ == 'bigint':
+            df[name] = pd.to_numeric(df[name], errors='coerce').astype('Int64')
+        elif type_ == 'double':
+            df[name] = pd.to_numeric(df[name], errors='coerce')
+        elif type_ == 'boolean':
+            df[name] = df[name].astype('boolean')
+        elif type_ == 'timestamp':
+            df[name] = pd.to_datetime(df[name], errors='coerce').dt.strftime(
+                '%Y-%m-%d %H:%M:%S')
+    return df
+
+
+class LocalS3Client:
+    """Stands in for the boto3 S3 client, writing objects under a local dir.
+
+    The S3 key becomes the path below `root`, so dry-run output can be diffed
+    against a real partition file. `Bucket` is accepted and ignored.
+    """
+
+    def __init__(self, root: str):
+        self.root = root
+        self.written = []
+
+    def put_object(self, *, Body: str, Bucket: str, Key: str, ContentType: str) -> dict:
+        path = os.path.join(self.root, Key)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, 'w', encoding='utf-8') as handle:
+            handle.write(Body)
+        self.written.append(path)
+        logger.info(f'[dry-run] wrote {path}')
+        return {}
+
+
+def check_csv_against_ddl(csv_path: str, ddl_path: str, table: str) -> dict:
+    """Compare a written CSV's header to the DDL and count populated columns.
+
+    Production CSV is headerless and read by field position, so column order is
+    never validated at load time. Dry-run output keeps its header, which makes
+    the comparison possible.
+
+    Returns a dict of row count, whether the header matches, both column lists,
+    and the non-null count per column.
+    """
+    expected = [name for name, _ in ddl_columns(ddl_path, table)]
+    frame = pd.read_csv(csv_path)
+    actual = list(frame.columns)
+
+    populated = {
+        column: int(frame[column].notna().sum())
+        for column in actual if column in expected
+    }
+    return {
+        'rows': len(frame),
+        'matches_ddl': actual == expected,
+        'expected': expected,
+        'actual': actual,
+        'populated': populated,
+    }
+
+
+class SchemaDriftError(RuntimeError):
+    """A Glue table's columns cannot be reconciled by appending.
+
+    Means the table has a column renamed, retyped, or inserted mid-list, so the
+    existing files and the table definition already disagree about what each
+    field position holds. Needs a hand-written migration.
+    """
+
+
+DDL_COLUMN_BLOCK = (
+    r'CREATE EXTERNAL TABLE IF NOT EXISTS {table} \((.*?)\n\)\s*\nPARTITIONED BY')
+
+
+def ddl_columns(ddl_path: str, table: str) -> List[Tuple[str, str]]:
+    """Parse (name, type) for one CREATE EXTERNAL TABLE block in a DDL file.
+
+    Partition keys are excluded, since they are declared separately in Glue.
+    The DDL is the single source of truth for column order; tests assert the
+    Pydantic models agree with it.
+    """
+    text = open(ddl_path).read()
+    match = re.search(DDL_COLUMN_BLOCK.format(table=re.escape(table)), text, re.S)
+    if not match:
+        raise ValueError(f'No CREATE EXTERNAL TABLE block for {table} in {ddl_path}')
+
+    columns = []
+    for line in match.group(1).splitlines():
+        line = line.strip()
+        if not line or line.startswith('--'):
+            continue
+        parts = line.split()
+        columns.append((parts[0], parts[1].rstrip(',').lower()))
+    return columns
+
+
+def ensure_table_columns(table: str, database: str, region: str, bucket: str,
+                         expected: List[Tuple[str, str]]) -> List[str]:
+    """Append any columns the table is missing, and return their names.
+
+    Columns are only ever appended, because the CSV is read by field position:
+    a column added anywhere but the end would shift every later value. If the
+    live table diverges from `expected` in any other way, raises
+    SchemaDriftError instead of adding on top of the mismatch.
+
+    Idempotent: a no-op once the table matches.
+    """
+    glue_client = boto3.client('glue',
+                               region_name=region,
+                               aws_access_key_id=AWS_ACCESS_KEY_ID,
+                               aws_secret_access_key=AWS_SECRET_ACCESS_KEY)
+
+    table_meta = glue_client.get_table(DatabaseName=database, Name=table)['Table']
+    current = [(column['Name'], column['Type'].lower())
+               for column in table_meta['StorageDescriptor']['Columns']]
+
+    if current == expected[:len(current)]:
+        missing = expected[len(current):]
+    else:
+        divergence = next(
+            (i for i, pair in enumerate(current)
+             if i >= len(expected) or expected[i] != pair), len(current))
+        raise SchemaDriftError(
+            f'{database}.{table} column {divergence} is '
+            f'{current[divergence] if divergence < len(current) else "absent"}, '
+            f'expected {expected[divergence] if divergence < len(expected) else "absent"}. '
+            f'Columns can only be appended; this table has diverged and needs '
+            f'a hand-written migration.')
+
+    if not missing:
+        logger.info(f'{database}.{table}: schema up to date ({len(current)} columns)')
+        return []
+
+    additions = ', '.join(f'{name} {type_}' for name, type_ in missing)
+    logger.info(f'{database}.{table}: adding column(s) {additions}')
+    run_athena_query_no_results(
+        bucket=bucket,
+        query=f'ALTER TABLE {table} ADD COLUMNS ({additions})',
+        database=database,
+        region=region)
+
+    return [name for name, _ in missing]
+
+
 def validate_dataframe(
         df: pd.DataFrame, model: Type[BaseModel]
 ) -> Tuple[List[BaseModel], List[Tuple[dict, str]]]:
@@ -687,6 +845,86 @@ def send_sns_alert(message, topic_arn, subject, region):
         raise ValueError(f'Error sending SNS alert! {str(e)}')
 
 
+def shopify_order_record(order: dict) -> dict:
+    """Flatten one Shopify order into the shopify_orders row.
+
+    Key order is CSV column order and must match ddl.sql, so new fields are
+    appended, never inserted.
+
+    `order_id` is Shopify's `order_number`, which is what ShipBob records and
+    what the two systems join on. The internal id is kept as `shopify_order_id`.
+    """
+    import pandas as pd
+
+    created_at = order.get('created_at')
+    shipping_info = order.get('shipping_address') or {}
+    customer = order.get('customer') or {}
+
+    return {
+        'order_id': order.get('order_number'),
+        'email': order.get('email'),
+        'created_at': created_at,
+        'shipping_address': shipping_info.get('address1'),
+        'shipping_city': shipping_info.get('city'),
+        'shipping_province': shipping_info.get('province'),
+        'shipping_country': shipping_info.get('country'),
+        'subtotal_price': order.get('subtotal_price'),
+        'total_line_items_price': order.get('total_line_items_price'),
+        'total_tax': order.get('total_tax'),
+        'total_discounts': order.get('total_discounts'),
+        'total_shipping_fee': order.get('total_shipping_price_set', {}).get(
+            'shop_money', {}).get('amount'),
+        'total_price': order.get('total_price'),
+        'order_date': pd.to_datetime(created_at).strftime('%Y-%m-%d') if created_at else None,
+        # --- appended 2026-09: stable identifiers and order state ---
+        'shopify_order_id': order.get('id'),
+        'customer_id': customer.get('id'),
+        'is_test': bool(order.get('test', False)),
+        'financial_status': order.get('financial_status'),
+        'fulfillment_status': order.get('fulfillment_status'),
+        'cancelled_at': order.get('cancelled_at'),
+        'tags': order.get('tags'),
+    }
+
+
+def shopify_line_item_records(order: dict) -> List[dict]:
+    """Flatten one Shopify order into its shopify_line_items rows.
+
+    `variant_id` is the durable product identity; sku, title and variant_title
+    are merchant-editable and change over time.
+
+    Key order is CSV column order and must match ddl.sql, so new fields are
+    appended, never inserted.
+    """
+    created_at = order.get('created_at')
+    order_id = order.get('order_number')
+    email = order.get('email')
+    order_date = None
+    if created_at:
+        import pandas as pd
+        order_date = pd.to_datetime(created_at).strftime('%Y-%m-%d')
+
+    records = []
+    for line_item in order.get('line_items') or []:
+        records.append({
+            'order_id': order_id,
+            'email': email,
+            'created_at': created_at,
+            'order_date': order_date,
+            'price': line_item.get('price'),
+            'quantity': line_item.get('quantity'),
+            'sku': line_item.get('sku'),
+            'title': line_item.get('title'),
+            'variant_title': line_item.get('variant_title'),
+            'line_item_name': line_item.get('name'),
+            # --- appended 2026-09: stable identifiers and line-level discount ---
+            'variant_id': line_item.get('variant_id'),
+            'product_id': line_item.get('product_id'),
+            'line_discount': line_item.get('total_discount'),
+        })
+    return records
+
+
 def get_shopify_orders_by_date(
     shopify_api_key: str,
     shopify_api_pw: str,
@@ -747,55 +985,8 @@ def get_shopify_orders_by_date(
 
         # Build out the orders and line items records
         for order in orders:
-            order_id   = order.get('order_number')
-            created_at = order.get('created_at')
-            email      = order.get('email')
-
-            # Convert created_at to YYYY-MM-DD
-            order_date = pd.to_datetime(created_at).strftime('%Y-%m-%d') if created_at else None
-
-            # Parse shipping details
-            shipping_info = {} if order.get('shipping_address',{}) == None else order.get('shipping_address',{})
-            
-            shipping_address = shipping_info.get('address1', None) 
-            shipping_city = shipping_info.get('city',None)
-            shipping_province = shipping_info.get('province',None)
-            shipping_country = shipping_info.get('country',None)
-
-            # Build an order record
-            all_orders.append({
-                'order_id': order_id,
-                'email': email,
-                'created_at': created_at,
-                'order_date': order_date,
-                'subtotal_price': order.get('subtotal_price'),
-                'total_line_items_price': order.get('total_line_items_price'),
-                'total_tax': order.get('total_tax'),
-                'total_discounts': order.get('total_discounts'),
-                'total_shipping_fee': order.get('total_shipping_price_set', {}).get('shop_money', {}).get('amount'),
-                'total_price': order.get('total_price'),
-                'shipping_address': shipping_address,
-                'shipping_city': shipping_city,
-                'shipping_province': shipping_province,
-                'shipping_country': shipping_country
-            })
-
-
-            # Collect line items for each order
-            for line_item in order.get('line_items', []):
-                line_items_record = {
-                    'order_id': order_id,
-                    'email': email,
-                    'created_at': created_at,
-                    'order_date': order_date,
-                    'price': line_item.get('price'),
-                    'quantity': line_item.get('quantity'),
-                    'sku': line_item.get('sku'),
-                    'title': line_item.get('title'),
-                    'variant_title': line_item.get('variant_title'),
-                    'line_item_name': line_item.get('name')
-                }
-                all_line_items.append(line_items_record)
+            all_orders.append(shopify_order_record(order))
+            all_line_items.extend(shopify_line_item_records(order))
 
         # Pagination: check the 'Link' header for rel="next"
         link_header = response.headers.get('Link', '')

@@ -2,6 +2,20 @@ name: Shopify Order Details
 
 on:
   workflow_dispatch:
+    inputs:
+      start_date:
+        description: 'Start date YYYY-MM-DD. Leave blank for the normal daily run.'
+        required: false
+        default: ''
+      end_date:
+        description: 'End date YYYY-MM-DD. Required if start_date is set.'
+        required: false
+        default: ''
+      dry_run:
+        description: 'Pull from Shopify but write nothing to S3 or Athena. CSVs are uploaded as a build artifact to inspect.'
+        type: boolean
+        required: false
+        default: false
   schedule:
     - cron: '0 5 * * *'  # Runs at AM every day
 
@@ -27,8 +41,37 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-  
+
+      # A dry run needs only the Shopify credentials. It writes CSVs under
+      # ./dryrun using the production key layout, checks their columns against
+      # ddl.sql, and touches no AWS service.
+      - name: Run job (dry run)
+        if: ${{ inputs.dry_run }}
+        env:
+          SHOPIFY_API_KEY: ${{ secrets.SHOPIFY_API_KEY }}
+          SHOPIFY_API_PW: ${{ secrets.SHOPIFY_API_PW }}
+          SHOPIFY_STORE_URL: ${{ secrets.SHOPIFY_STORE_URL }}
+          S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
+          GLUE_DATABASE_NAME: ${{ secrets.GLUE_DATABASE_NAME }}
+        run: |
+          if [ -n "${{ inputs.start_date }}" ]; then
+            python3 src/shopify_order_details/main.py \
+              --start_date "${{ inputs.start_date }}" \
+              --end_date "${{ inputs.end_date }}" --dry-run
+          else
+            python3 src/shopify_order_details/main.py --dry-run
+          fi
+
+      - name: Upload dry-run CSVs
+        if: ${{ inputs.dry_run }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: shopify-dryrun-csv
+          path: dryrun/
+          if-no-files-found: warn
+
       - name: Run job
+        if: ${{ !inputs.dry_run }}
         env:
           AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
           AWS_ACCESS_SECRET: ${{ secrets.AWS_ACCESS_SECRET }}
@@ -37,10 +80,9 @@ jobs:
           SHOPIFY_API_KEY: ${{ secrets.SHOPIFY_API_KEY }}
           SHOPIFY_API_PW: ${{ secrets.SHOPIFY_API_PW }}
           SHOPIFY_STORE_URL: ${{ secrets.SHOPIFY_STORE_URL }}
-          
-        run: src/shopify_order_details/run.sh
+        # With both dates supplied this runs exactly that range, which is how a
+        # single-day verification run is done. With neither, run.sh does its
+        # usual gap check plus yesterday.
+        run: src/shopify_order_details/run.sh ${{ inputs.start_date }} ${{ inputs.end_date }}
 
-      
-  
       - run: echo "Job status - ${{ job.status }}."
-  

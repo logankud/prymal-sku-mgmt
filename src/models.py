@@ -22,6 +22,31 @@ class ShopifyLineItem(BaseModel):
         None, description="Title of the product variant")
     line_item_name: str = Field(..., description="Name of the line item")
 
+    # Field order is CSV column order and must match ddl.sql, so new fields
+    # are appended, never inserted.
+    variant_id: Optional[int] = Field(
+        None,
+        description="Shopify variant ID. The durable product identity. Null "
+                    "for line items with no variant, such as gift cards")
+    product_id: Optional[int] = Field(
+        None, description="Shopify product ID that the variant belongs to")
+    line_discount: float = Field(
+        0.0, ge=0, description="Discount allocated to this line item")
+
+    @field_validator('variant_id', 'product_id', mode='before')
+    @classmethod
+    def blank_id_is_none(cls, value):
+        if value is None or value == '' or (isinstance(value, float) and math.isnan(value)):
+            return None
+        return value
+
+    @field_validator('line_discount', mode='before')
+    @classmethod
+    def default_missing_discount(cls, value):
+        if value is None or value == '' or (isinstance(value, float) and math.isnan(value)):
+            return 0.0
+        return value
+
     @field_validator('*', mode='before')
     @classmethod
     def replace_delimiter(cls, value):
@@ -96,6 +121,55 @@ class ShopifyOrder(BaseModel):
                                description="Final total price for the order")
     order_date: datetime = Field(
         ..., description="Date when the order was placed in ISO format")
+
+    # Field order is CSV column order and must match ddl.sql, so new fields
+    # are appended, never inserted.
+    shopify_order_id: Optional[int] = Field(
+        None,
+        description="Shopify's internal order id. Distinct from order_id, "
+                    "which is the order_number that joins to ShipBob")
+    customer_id: Optional[int] = Field(
+        None,
+        description="Shopify customer id. Durable across email changes. "
+                    "Null for guest checkout")
+    is_test: bool = Field(
+        False, description="Shopify's own test-order flag")
+    financial_status: Optional[str] = Field(
+        None, description="paid, pending, refunded, partially_refunded, voided")
+    fulfillment_status: Optional[str] = Field(
+        None, description="fulfilled, partial, restocked, or null if unfulfilled")
+    cancelled_at: Optional[datetime] = Field(
+        None, description="When the order was cancelled, null if it was not")
+    tags: Optional[str] = Field(
+        None, description="Comma-separated Shopify order tags")
+
+    @field_validator('shopify_order_id', 'customer_id', mode='before')
+    @classmethod
+    def blank_id_is_none(cls, value):
+        if value is None or value == '' or (isinstance(value, float) and math.isnan(value)):
+            return None
+        return value
+
+    @field_validator('is_test', mode='before')
+    @classmethod
+    def default_missing_test_flag(cls, value):
+        if value is None or value == '' or (isinstance(value, float) and math.isnan(value)):
+            return False
+        return value
+
+    @field_validator('cancelled_at', mode='before')
+    @classmethod
+    def validate_nullable_datetime(cls, value):
+        if value is None or value == '' or (isinstance(value, float) and math.isnan(value)):
+            return None
+        if isinstance(value, datetime):
+            return value.strftime('%Y-%m-%d %H:%M:%S')
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value).strftime('%Y-%m-%d %H:%M:%S')
+            except ValueError:
+                raise ValueError(f"Invalid datetime format for cancelled_at: {value}")
+        return value
 
     @field_validator('*', mode='before')
     @classmethod

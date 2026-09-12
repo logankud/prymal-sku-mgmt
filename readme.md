@@ -32,5 +32,27 @@ SHIPBOB_API_SECRET=... uv run python src/shipbob_inventory_details/main.py --dry
 SHIPBOB_API_SECRET=... uv run python src/shipbob_order_details/main.py --start_date 2026-07-15 --end_date 2026-07-16 --dry-run
 ```
 
+### Testing the Shopify pipeline
+
+The Shopify job takes the same `--dry-run`. It pulls from the live API, writes
+CSVs under `./dryrun` using the production S3 key layout, and then checks the
+columns of what it wrote against `src/shopify_order_details/ddl.sql`, failing
+if they disagree. It touches no AWS service.
+
+```bash
+SHOPIFY_API_KEY=... SHOPIFY_API_PW=... uv run python src/shopify_order_details/main.py --start_date 2026-08-15 --end_date 2026-08-15 --dry-run
+```
+
+A dry run proves the file is shaped correctly. It cannot prove Athena reads it
+back correctly, because the production CSV is headerless and Athena maps field
+position to column position. For that, run the **Shopify Order Details**
+workflow manually with `start_date` and `end_date` set to a single recent day,
+then query that partition. The S3 key is deterministic per day, so re-running a
+date rewrites its file rather than duplicating it.
+
+The same workflow has a `dry_run` checkbox, which runs the command above on the
+runner and uploads the CSVs as a build artifact. That is the way to inspect
+output without Shopify credentials on your own machine.
+
 `test.py` is a preflight that checks the token authenticates against the pinned
 API version and prints the channel scopes it carries.

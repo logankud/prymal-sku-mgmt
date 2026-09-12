@@ -40,6 +40,17 @@ def main():
         help=
         'End date to use to extract records.  Records will be extracted from the shopify /orders API                                 from 00:00:00 (UTC) on the start_date through 23:59:59 (UTC) on the end_date'
     )
+    parser.add_argument(
+        '--dry-run',
+        metavar='DIR',
+        nargs='?',
+        const='dryrun',
+        default=None,
+        help='Pull from the live Shopify API but write CSVs to DIR (default: '
+             './dryrun) using the production S3 key layout, then verify the '
+             'columns against ddl.sql. Touches no AWS service. Needs only '
+             'SHOPIFY_API_KEY and SHOPIFY_API_PW')
+
     # Parse input args
     args = parser.parse_args()
     logger.info(f'Args: {args}')
@@ -62,36 +73,50 @@ def main():
     # Set aws region
     REGION = 'us-east-1'
 
-    # Get s3 bucket
-    s3_bucket = os.environ.get('S3_BUCKET_NAME')
-    if not s3_bucket:
-        raise ValueError("S3_BUCKET_NAME environment variable is not set")
+    def require(name):
+        value = os.environ.get(name)
+        if not value:
+            raise ValueError(f'{name} environment variable is not set')
+        return value
 
-    # Get Glue database
-    glue_database = os.getenv('GLUE_DATABASE_NAME')
-    if not glue_database:
-        raise ValueError("S3_BUCKET environment variable is not set")
+    # Required either way: both modes read from the Shopify API.
+    SHOPIFY_API_KEY = require('SHOPIFY_API_KEY')
+    SHOPIFY_API_PW = require('SHOPIFY_API_PW')
 
-    # Get s3 bucket
-    AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY')
-    if not s3_bucket:
-        raise ValueError("AWS_ACCESS_KEY environment variable is not set")
+    # A dry run writes to the local filesystem and calls no AWS service, so it
+    # requires no AWS configuration.
+    s3_bucket = glue_database = None
+    AWS_ACCESS_KEY_ID = AWS_SECRET_ACCESS_KEY = None
+    if not args.dry_run:
+        s3_bucket = require('S3_BUCKET_NAME')
+        glue_database = require('GLUE_DATABASE_NAME')
+        AWS_ACCESS_KEY_ID = require('AWS_ACCESS_KEY')
+        AWS_SECRET_ACCESS_KEY = require('AWS_ACCESS_SECRET')
 
-    # Get s3 bucket
-    AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_ACCESS_SECRET')
-    if not s3_bucket:
-        raise ValueError("AWS_ACCESS_SECRET environment variable is not set")
+    ddl_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ddl.sql')
 
-    # Get shopify api key 
-    SHOPIFY_API_KEY = os.environ.get('SHOPIFY_API_KEY')
-    if not s3_bucket:
-        raise ValueError("SHOPIFY_API_KEY environment variable is not set")
-
-    # Get shopify api pw 
-    SHOPIFY_API_PW = os.environ.get('SHOPIFY_API_PW')
-    if not s3_bucket:
-        raise ValueError("SHOPIFY_API_PASSWORD environment variable is not set")
-
+    if args.dry_run:
+        # --dry-run takes an optional directory and defaults to ./dryrun, so
+        # args.dry_run is that path. LocalS3Client writes each object under it
+        # using the S3 key, and ignores the bucket argument.
+        s3_client = LocalS3Client(args.dry_run)
+        logger.info(f'[dry-run] writing under {args.dry_run}, skipping Glue and Athena')
+    else:
+        # Append any column the live table is missing, so a schema change
+        # ships with the code rather than as a separate migration. Idempotent.
+        s3_client = boto3.client('s3',
+                                 aws_access_key_id=AWS_ACCESS_KEY_ID,
+                                 aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+                                 region_name=REGION)
+        for table in ('shopify_orders', 'shopify_line_items'):
+            added = ensure_table_columns(
+                table=table,
+                database=glue_database,
+                region=REGION,
+                bucket=s3_bucket,
+                expected=ddl_columns(ddl_path, table))
+            if added:
+                logger.info(f'{table}: added column(s) {added}')
 
     # Iterate through all dates in the date range
     while pd.to_datetime(start_date) <= pd.to_datetime(end_date):
@@ -146,18 +171,14 @@ def main():
                 s3_prefix = f"shopify/orders/year={year}/month={month}/day={day}/shopify_orders_{start_date.replace('-','_')}.csv"
 
                 try:
-
-                    # instantiate s3 client
-                    s3_client = boto3.client(
-                        's3',
-                        aws_access_key_id=AWS_ACCESS_KEY_ID,
-                aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-                        region_name=REGION)
-                    
                     # Write to s3
+                    # Match the declared Glue types before writing; pandas
+                    # defaults silently produce unreadable values otherwise.
                     write_df_to_s3(bucket=s3_bucket,
                                    key=s3_prefix,
-                                   df=pd.DataFrame(valid_data),
+                                   df=coerce_frame_to_ddl(
+                                       pd.DataFrame(valid_data),
+                                       ddl_columns(ddl_path, 'shopify_orders')),
                                    s3_client=s3_client)
 
 
@@ -209,7 +230,9 @@ def main():
                     # Write to s3
                     write_df_to_s3(bucket=s3_bucket,
                                    key=s3_prefix,
-                                   df=pd.DataFrame(valid_data),
+                                   df=coerce_frame_to_ddl(
+                                       pd.DataFrame(valid_data),
+                                       ddl_columns(ddl_path, 'shopify_line_items')),
                                    s3_client=s3_client)
 
 
@@ -231,12 +254,41 @@ def main():
             pd.DateOffset(days=1)).strftime('%Y-%m-%d')
 
 
+    if args.dry_run:
+        # The whole point of the dry run: confirm the CSV columns line up with
+        # the table before a headerless file is ever loaded by position.
+        logger.info('=' * 66)
+        ok = True
+        for path in s3_client.written:
+            table = ('shopify_line_items' if '/line_items/' in path.replace(os.sep, '/')
+                     else 'shopify_orders')
+            report = check_csv_against_ddl(path, ddl_path, table)
+            ok &= report['matches_ddl']
+            logger.info(f"{table}: {report['rows']} row(s), "
+                        f"columns {'MATCH' if report['matches_ddl'] else 'DO NOT MATCH'} ddl.sql")
+            if not report['matches_ddl']:
+                logger.error(f"  expected: {report['expected']}")
+                logger.error(f"  actual:   {report['actual']}")
+            new_columns = [c for c in report['expected']
+                           if c in ('variant_id', 'product_id', 'line_discount',
+                                    'shopify_order_id', 'customer_id', 'is_test',
+                                    'financial_status', 'fulfillment_status',
+                                    'cancelled_at', 'tags')]
+            for column in new_columns:
+                filled = report['populated'].get(column, 0)
+                logger.info(f"  {column:<20} {filled}/{report['rows']} populated")
+        logger.info('=' * 66)
+        if not ok:
+            raise ValueError('CSV columns do not match ddl.sql - do not merge')
+        logger.info('[dry-run] complete, nothing written to S3 or Athena')
+        return
+
     # -----------------
     # Run Athena query to update partitions
     # -----------------
-    
+
     #  --------- ORDERS -----------
-    
+
     logger.info('Running MKSCK REPAIR TABLE to update partitions')
 
     # Define SQL query
