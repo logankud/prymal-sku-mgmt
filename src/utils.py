@@ -419,6 +419,90 @@ def latest_partition(table: str, database: str, region: str,
     return max(values) if values else None
 
 
+def coerce_frame_to_ddl(df: pd.DataFrame, columns: List[Tuple[str, str]]) -> pd.DataFrame:
+    """Render each column the way its declared Glue type can be read back.
+
+    The CSV is the only contract between this job and Athena, and pandas'
+    defaults break it in two ways that produce NULLs rather than errors:
+
+    bigint  - a column holding any null is upcast to float64 and written as
+              '111.0'. Athena reads bigint and yields NULL. Nullable Int64
+              writes '111' and an empty field instead.
+
+    timestamp - to_csv drops the time component from a datetime64 column when
+              every value is midnight, writing '2026-08-15'. A Hive timestamp
+              cannot parse a bare date, so it yields NULL. This is why
+              shopify_orders.order_date has been NULL in all 264,165 rows
+              while created_at, which always carries a time, has been fine.
+
+    Both are silent. Nothing fails, the column is simply empty in Athena.
+    """
+    df = df.copy()
+    for name, type_ in columns:
+        if name not in df.columns:
+            continue
+        if type_ == 'bigint':
+            df[name] = pd.to_numeric(df[name], errors='coerce').astype('Int64')
+        elif type_ == 'double':
+            df[name] = pd.to_numeric(df[name], errors='coerce')
+        elif type_ == 'boolean':
+            df[name] = df[name].astype('boolean')
+        elif type_ == 'timestamp':
+            df[name] = pd.to_datetime(df[name], errors='coerce').dt.strftime(
+                '%Y-%m-%d %H:%M:%S')
+    return df
+
+
+class LocalS3Client:
+    """Stands in for the boto3 S3 client and writes objects under a local dir.
+
+    The production key layout is preserved, so a dry-run output can be diffed
+    against a real partition file to check column order and values before
+    anything is written for real.
+
+    (src/shipbob/jobs.py has a private copy of this predating the shared one.
+    Collapsing the two is worth doing, but not inside a Shopify change.)
+    """
+
+    def __init__(self, root: str):
+        self.root = root
+        self.written = []
+
+    def put_object(self, *, Body: str, Bucket: str, Key: str, ContentType: str) -> dict:
+        path = os.path.join(self.root, Key)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, 'w', encoding='utf-8') as handle:
+            handle.write(Body)
+        self.written.append(path)
+        logger.info(f'[dry-run] wrote {path}')
+        return {}
+
+
+def check_csv_against_ddl(csv_path: str, ddl_path: str, table: str) -> dict:
+    """Compare a written CSV's header to the DDL, and report on new columns.
+
+    This is the check a dry run exists for. The job writes headerless CSV in
+    production, so column order is never validated at load time - Athena just
+    reads field N into column N. Here the frame is written with its header, so
+    the ordering can be confirmed before the first real write.
+    """
+    expected = [name for name, _ in ddl_columns(ddl_path, table)]
+    frame = pd.read_csv(csv_path)
+    actual = list(frame.columns)
+
+    populated = {
+        column: int(frame[column].notna().sum())
+        for column in actual if column in expected
+    }
+    return {
+        'rows': len(frame),
+        'matches_ddl': actual == expected,
+        'expected': expected,
+        'actual': actual,
+        'populated': populated,
+    }
+
+
 class SchemaDriftError(RuntimeError):
     """A Glue table's columns cannot be reconciled by appending.
 
