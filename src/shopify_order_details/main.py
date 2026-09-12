@@ -26,9 +26,8 @@ def main():
                                timedelta(days=1)).replace(
                                    hour=0, minute=0, second=0,
                                    microsecond=0).strftime('%Y-%m-%d'),
-        help=
-        'Start date to use to extract records.  Records will be extracted from the shipbob_order_details table                                 from 00:00:00 (UTC) on the start_date through 00:00:00 (UTC) on the end_date - end_date is not inclusive'
-    )
+        help='First day to extract, as a calendar day in the Shopify store '
+             'timezone. Matches the day shown in the Shopify admin UI')
 
     parser.add_argument(
         '--end_date',
@@ -37,9 +36,8 @@ def main():
         default=pd.to_datetime(datetime.now(
             pytz.utc)).replace(hour=23, minute=59, second=59,
                                microsecond=59).strftime('%Y-%m-%d'),
-        help=
-        'End date to use to extract records.  Records will be extracted from the shopify /orders API                                 from 00:00:00 (UTC) on the start_date through 23:59:59 (UTC) on the end_date'
-    )
+        help='Last day to extract, inclusive, as a calendar day in the '
+             'Shopify store timezone')
     parser.add_argument(
         '--dry-run',
         metavar='DIR',
@@ -93,6 +91,11 @@ def main():
         AWS_ACCESS_KEY_ID = require('AWS_ACCESS_KEY')
         AWS_SECRET_ACCESS_KEY = require('AWS_ACCESS_SECRET')
 
+    # A partition is one calendar day in the store's timezone, which is the day
+    # the Shopify admin UI shows. Read once and reused for every date in the
+    # range, since it does not change mid-run.
+    store_timezone = shopify_store_timezone(SHOPIFY_API_KEY, SHOPIFY_API_PW)
+
     ddl_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ddl.sql')
 
     if args.dry_run:
@@ -124,7 +127,12 @@ def main():
         # ------ GET Shopify Data
     
         # List all orders in shipbob for a date range
-        shopify_orders_df, shopify_line_item_df = get_shopify_orders_by_date(shopify_api_key=SHOPIFY_API_KEY, shopify_api_pw=SHOPIFY_API_PW,start_date=start_date, end_date=start_date)
+        shopify_orders_df, shopify_line_item_df = get_shopify_orders_by_date(
+            shopify_api_key=SHOPIFY_API_KEY,
+            shopify_api_pw=SHOPIFY_API_PW,
+            start_date=start_date,
+            end_date=start_date,
+            store_timezone=store_timezone)
         
         if len(shopify_orders_df) == 0:
             logger.info(f'0 Records returned from Shopify API')

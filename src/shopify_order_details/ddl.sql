@@ -5,6 +5,10 @@
 -- table is missing, so a schema change means editing this file and the
 -- matching Pydantic model in src/models.py. There is no separate migration.
 --
+-- A partition is one calendar day in the Shopify store's timezone, which is
+-- the day the Shopify admin UI shows. created_at and order_date are in that
+-- same zone, so grouping by partition and grouping by order_date agree.
+--
 -- Column order is load-bearing: the CSV is written in Pydantic field order and
 -- read back by field position, so a column added anywhere but the end shifts
 -- every later value. tests/test_shopify_extract.py asserts the orders agree.
@@ -12,7 +16,7 @@
 CREATE EXTERNAL TABLE IF NOT EXISTS shopify_orders (
     order_id                BIGINT    COMMENT 'Shopify order_number, the human-facing number. This is what ShipBob records as order_number and what the two systems join on',
     email                   STRING    COMMENT 'Customer email. Invalid or blank addresses are written as unknown@unknown.com by the ETL',
-    created_at              TIMESTAMP COMMENT 'When the order was placed',
+    created_at              TIMESTAMP COMMENT 'When the order was placed, in the Shopify store timezone',
     shipping_address        STRING    COMMENT 'Street address line 1',
     shipping_city           STRING    COMMENT 'Shipping city',
     shipping_province       STRING    COMMENT 'Shipping state or province',
@@ -23,7 +27,7 @@ CREATE EXTERNAL TABLE IF NOT EXISTS shopify_orders (
     total_discounts         DOUBLE    COMMENT 'Total discount applied to the order',
     total_shipping_fee      DOUBLE    COMMENT 'Shipping charged',
     total_price             DOUBLE    COMMENT 'Amount the customer paid, including tax and shipping',
-    order_date              TIMESTAMP COMMENT 'Order date at midnight. NULL in partitions written before 2026-09; prefer created_at where the time matters',
+    order_date              TIMESTAMP COMMENT 'Calendar day of created_at in the store timezone, at midnight. Matches the year/month/day partition. NULL in partitions written before 2026-09',
     shopify_order_id        BIGINT    COMMENT 'Shopify internal order id. Distinct from order_id above, which is order_number',
     customer_id             BIGINT    COMMENT 'Shopify customer id. Durable identity that survives an email change. Null for guest checkout',
     is_test                 BOOLEAN   COMMENT 'Shopify test-order flag. Exclude these from any reported figure',
@@ -43,8 +47,8 @@ TBLPROPERTIES ('skip.header.line.count'='1');
 CREATE EXTERNAL TABLE IF NOT EXISTS shopify_line_items (
     order_id        BIGINT COMMENT 'Shopify order_number, joins to shopify_orders.order_id',
     email           STRING COMMENT 'Customer email on the parent order',
-    created_at      STRING COMMENT 'When the parent order was placed',
-    order_date      STRING COMMENT 'Order date as YYYY-MM-DD',
+    created_at      STRING COMMENT 'When the parent order was placed, in the Shopify store timezone',
+    order_date      STRING COMMENT 'Calendar day of created_at in the store timezone. Matches the year/month/day partition',
     price           DOUBLE COMMENT 'Unit price before discount. Varies within a SKU as prices change',
     quantity        BIGINT COMMENT 'Units on this line',
     sku             STRING COMMENT 'Merchant-assigned SKU. Editable and reusable, and written as the literal string No SKU when absent. Prefer variant_id for identity',
