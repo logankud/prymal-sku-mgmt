@@ -32,6 +32,18 @@ SHIPBOB_API_SECRET=... uv run python src/shipbob_inventory_details/main.py --dry
 SHIPBOB_API_SECRET=... uv run python src/shipbob_order_details/main.py --start_date 2026-07-15 --end_date 2026-07-16 --dry-run
 ```
 
+### Shopify dates
+
+A partition is one calendar day in the Shopify store's timezone, read from the
+shop endpoint, which is the day the Shopify admin UI shows. `created_at` and
+`order_date` are in that same zone, so grouping by partition and grouping by
+`order_date` give the same answer.
+
+Partitions written before this change used a UTC day for the partition while
+`created_at` stayed store-local, so roughly seven hours of each partition
+belonged to the previous local day. That is corrected going forward, and the
+backfill will bring history into line.
+
 ### Testing the Shopify pipeline
 
 The Shopify job takes the same `--dry-run`. It pulls from the live API, writes

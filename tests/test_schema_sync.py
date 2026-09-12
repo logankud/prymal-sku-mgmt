@@ -66,15 +66,17 @@ def test_unknown_table_raises():
 
 def test_missing_columns_are_appended(glue):
     expected = ddl_columns(DDL, 'shopify_line_items')
-    set_columns(glue, expected[:-3])          # the pre-2026-09 table
+    missing = expected[-3:]                   # a table lagging the DDL by three
+    set_columns(glue, expected[:-3])
 
     added = ensure_table_columns('shopify_line_items', 'prymal', 'us-east-1',
                                  'bkt', expected)
 
-    assert added == ['variant_id', 'product_id', 'line_discount']
+    assert added == [name for name, _ in missing]
     assert len(glue.issued) == 1
     assert glue.issued[0].startswith('ALTER TABLE shopify_line_items ADD COLUMNS (')
-    assert 'variant_id bigint' in glue.issued[0]
+    for name, type_ in missing:
+        assert f'{name} {type_}' in glue.issued[0]
 
 
 def test_up_to_date_table_issues_no_ddl(glue):

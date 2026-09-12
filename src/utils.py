@@ -845,7 +845,101 @@ def send_sns_alert(message, topic_arn, subject, region):
         raise ValueError(f'Error sending SNS alert! {str(e)}')
 
 
-def shopify_order_record(order: dict) -> dict:
+def _shopify_local_timestamp(created_at, store_timezone: str = None):
+    """created_at as wall-clock time in the store's timezone.
+
+    Shopify sends an offset, which the models then strip. Converting first
+    means created_at, order_date and the partition all describe the same day
+    whatever offset the API happens to send.
+    """
+    if not created_at or not store_timezone:
+        return created_at
+    stamp = pd.to_datetime(created_at)
+    if stamp.tzinfo is None:
+        stamp = stamp.tz_localize(store_timezone)
+    return stamp.tz_convert(store_timezone).strftime('%Y-%m-%d %H:%M:%S')
+
+
+def reconcile_shopify_export(api_orders: List[dict], orders_df, line_items_df,
+                             tolerance: float = 0.01) -> List[str]:
+    """Check the exported frames against the API payload they were built from.
+
+    Every other test in this repo compares the extract against a fixture
+    written by hand, which only proves the code does what its author intended.
+    This compares it against Shopify's own numbers, using
+    `total_line_items_price` as an independent witness: Shopify computes it, we
+    never read it into a line, and the admin UI reports from the same field. If
+    our per-line price and quantity sum to it, the line extraction is right.
+
+    Returns a list of discrepancies, empty when the export matches.
+    """
+    problems = []
+    api_by_id = {order.get('order_number'): order for order in api_orders}
+
+    exported = list(orders_df['order_id']) if len(orders_df) else []
+    if len(exported) != len(set(exported)):
+        problems.append(f'{len(exported) - len(set(exported))} duplicate order(s) exported')
+
+    missing = set(api_by_id) - set(exported)
+    extra = set(exported) - set(api_by_id)
+    if missing:
+        problems.append(f'{len(missing)} order(s) in the API response were not exported: '
+                        f'{sorted(missing)[:5]}')
+    if extra:
+        problems.append(f'{len(extra)} exported order(s) are not in the API response: '
+                        f'{sorted(extra)[:5]}')
+
+    for order_id, api_order in api_by_id.items():
+        api_lines = api_order.get('line_items') or []
+        if len(line_items_df):
+            ours = line_items_df[line_items_df['order_id'] == order_id]
+        else:
+            ours = line_items_df
+
+        if len(ours) != len(api_lines):
+            problems.append(f'order {order_id}: exported {len(ours)} line(s), '
+                            f'API returned {len(api_lines)}')
+            continue
+
+        our_gross = sum(float(price) * int(quantity)
+                        for price, quantity in zip(ours['price'], ours['quantity']))
+        api_gross = float(api_order.get('total_line_items_price') or 0)
+        if abs(our_gross - api_gross) > tolerance:
+            problems.append(
+                f'order {order_id}: exported lines sum to {our_gross:.2f} but '
+                f'Shopify reports total_line_items_price {api_gross:.2f}')
+
+    return problems
+
+
+def _shopify_utc_timestamp(created_at, store_timezone: str = None):
+    """created_at as UTC wall-clock time.
+
+    Derived from the original offset-bearing value rather than from the
+    local-time rendering, because a local wall time is ambiguous during the
+    hour that daylight saving repeats.
+    """
+    if not created_at:
+        return None
+    stamp = pd.to_datetime(created_at)
+    if stamp.tzinfo is None:
+        if not store_timezone:
+            return None
+        stamp = stamp.tz_localize(store_timezone)
+    return stamp.tz_convert('UTC').strftime('%Y-%m-%d %H:%M:%S')
+
+
+def _shopify_order_date(created_at, store_timezone: str = None):
+    """created_at as a calendar date. Converted to the store's timezone when
+    one is given; otherwise read in whatever offset the string carries."""
+    if not created_at:
+        return None
+    if store_timezone:
+        return shopify_local_date(created_at, store_timezone)
+    return pd.to_datetime(created_at).strftime('%Y-%m-%d')
+
+
+def shopify_order_record(order: dict, store_timezone: str = None) -> dict:
     """Flatten one Shopify order into the shopify_orders row.
 
     Key order is CSV column order and must match ddl.sql, so new fields are
@@ -863,7 +957,7 @@ def shopify_order_record(order: dict) -> dict:
     return {
         'order_id': order.get('order_number'),
         'email': order.get('email'),
-        'created_at': created_at,
+        'created_at': _shopify_local_timestamp(created_at, store_timezone),
         'shipping_address': shipping_info.get('address1'),
         'shipping_city': shipping_info.get('city'),
         'shipping_province': shipping_info.get('province'),
@@ -875,7 +969,7 @@ def shopify_order_record(order: dict) -> dict:
         'total_shipping_fee': order.get('total_shipping_price_set', {}).get(
             'shop_money', {}).get('amount'),
         'total_price': order.get('total_price'),
-        'order_date': pd.to_datetime(created_at).strftime('%Y-%m-%d') if created_at else None,
+        'order_date': _shopify_order_date(created_at, store_timezone),
         # --- appended 2026-09: stable identifiers and order state ---
         'shopify_order_id': order.get('id'),
         'customer_id': customer.get('id'),
@@ -884,10 +978,11 @@ def shopify_order_record(order: dict) -> dict:
         'fulfillment_status': order.get('fulfillment_status'),
         'cancelled_at': order.get('cancelled_at'),
         'tags': order.get('tags'),
+        'created_at_utc': _shopify_utc_timestamp(created_at, store_timezone),
     }
 
 
-def shopify_line_item_records(order: dict) -> List[dict]:
+def shopify_line_item_records(order: dict, store_timezone: str = None) -> List[dict]:
     """Flatten one Shopify order into its shopify_line_items rows.
 
     `variant_id` is the durable product identity; sku, title and variant_title
@@ -899,10 +994,10 @@ def shopify_line_item_records(order: dict) -> List[dict]:
     created_at = order.get('created_at')
     order_id = order.get('order_number')
     email = order.get('email')
-    order_date = None
-    if created_at:
-        import pandas as pd
-        order_date = pd.to_datetime(created_at).strftime('%Y-%m-%d')
+    order_date = _shopify_order_date(created_at, store_timezone)
+
+    created_at_utc = _shopify_utc_timestamp(created_at, store_timezone)
+    created_at = _shopify_local_timestamp(created_at, store_timezone)
 
     records = []
     for line_item in order.get('line_items') or []:
@@ -921,20 +1016,67 @@ def shopify_line_item_records(order: dict) -> List[dict]:
             'variant_id': line_item.get('variant_id'),
             'product_id': line_item.get('product_id'),
             'line_discount': line_item.get('total_discount'),
+            'created_at_utc': created_at_utc,
         })
     return records
+
+
+SHOPIFY_API_VERSION = '2021-07'
+# Used only if the shop endpoint cannot be reached. Shopify reports the real
+# value, so this is a last resort rather than a configuration point.
+DEFAULT_STORE_TIMEZONE = 'America/Los_Angeles'
+
+
+def shopify_store_timezone(shopify_api_key: str, shopify_api_pw: str,
+                           store_url: str = 'prymal-coffee-creamer.myshopify.com') -> str:
+    """Return the shop's IANA timezone, e.g. 'America/Los_Angeles'.
+
+    Shopify renders every date in the admin UI in this zone and stamps
+    created_at with its offset, so it is the zone a day has to be defined in
+    for the warehouse to agree with what the UI shows.
+    """
+    url = (f'https://{shopify_api_key}:{shopify_api_pw}@{store_url}'
+           f'/admin/api/{SHOPIFY_API_VERSION}/shop.json')
+    try:
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+        timezone_name = response.json()['shop']['iana_timezone']
+        logger.info(f'Shopify store timezone: {timezone_name}')
+        return timezone_name
+    except Exception as exc:
+        logger.warning(f'Could not read the store timezone ({exc}); '
+                       f'falling back to {DEFAULT_STORE_TIMEZONE}')
+        return DEFAULT_STORE_TIMEZONE
+
+
+def shopify_local_date(created_at, store_timezone: str) -> str:
+    """The calendar date of `created_at` in the store's timezone, YYYY-MM-DD.
+
+    Shopify sends created_at with a UTC offset. Reading the date off it without
+    converting gives whatever zone the string happened to carry.
+    """
+    stamp = pd.to_datetime(created_at)
+    if stamp.tzinfo is None:
+        stamp = stamp.tz_localize(store_timezone)
+    return stamp.tz_convert(store_timezone).strftime('%Y-%m-%d')
 
 
 def get_shopify_orders_by_date(
     shopify_api_key: str,
     shopify_api_pw: str,
     start_date: str,
-    end_date: str
+    end_date: str,
+    store_timezone: str = None,
 ):
     """
     Fetch all Shopify orders and line items for [start_date, end_date],
     returning (orders_df, line_items_df). Correctly paginates by inserting
     credentials into each subsequent 'next' link from the Link header.
+
+    The dates are calendar days in the store's timezone, matching what the
+    Shopify admin UI shows. The API filters on an absolute instant, so the
+    local day boundaries are converted to UTC for the request, and anything
+    outside the requested local days is dropped afterwards.
     """
     import requests
     import pandas as pd
@@ -942,12 +1084,18 @@ def get_shopify_orders_by_date(
     from loguru import logger
     from urllib.parse import urlsplit, urlunsplit
 
-    # Convert inputs to datetimes and build the min/max for the API query (UTC here)
-    start_dt = pd.to_datetime(start_date)
-    end_dt   = pd.to_datetime(end_date)
+    store_timezone = store_timezone or shopify_store_timezone(
+        shopify_api_key, shopify_api_pw)
 
-    created_at_min = start_dt.strftime('%Y-%m-%dT00:00:00Z')
-    created_at_max = end_dt.strftime('%Y-%m-%dT23:59:59Z')
+    # Local day boundaries, expressed to the API as the UTC instants they are.
+    start_local = pd.Timestamp(f'{start_date} 00:00:00', tz=store_timezone)
+    end_local = pd.Timestamp(f'{end_date} 23:59:59', tz=store_timezone)
+
+    created_at_min = start_local.tz_convert('UTC').strftime('%Y-%m-%dT%H:%M:%SZ')
+    created_at_max = end_local.tz_convert('UTC').strftime('%Y-%m-%dT%H:%M:%SZ')
+
+    logger.info(f'{start_date}..{end_date} in {store_timezone} '
+                f'is {created_at_min}..{created_at_max} UTC')
 
     # Base URL with credentials for page 1
     base_url = f"https://{shopify_api_key}:{shopify_api_pw}@prymal-coffee-creamer.myshopify.com"
@@ -967,6 +1115,8 @@ def get_shopify_orders_by_date(
     # Lists to accumulate all records
     all_orders = []
     all_line_items = []
+    outside_window = []
+    kept_payload = []
 
     while True:
         logger.info(f"Fetching: {url} with params={params}")
@@ -985,8 +1135,15 @@ def get_shopify_orders_by_date(
 
         # Build out the orders and line items records
         for order in orders:
-            all_orders.append(shopify_order_record(order))
-            all_line_items.extend(shopify_line_item_records(order))
+            # The UTC window can reach a little past the local days requested,
+            # so the local date decides what is kept.
+            local_date = shopify_local_date(order.get('created_at'), store_timezone)
+            if not start_date <= local_date <= end_date:
+                outside_window.append(local_date)
+                continue
+            kept_payload.append(order)
+            all_orders.append(shopify_order_record(order, store_timezone))
+            all_line_items.extend(shopify_line_item_records(order, store_timezone))
 
         # Pagination: check the 'Link' header for rel="next"
         link_header = response.headers.get('Link', '')
@@ -1027,6 +1184,25 @@ def get_shopify_orders_by_date(
     # Convert accumulated records to DataFrames
     orders_df = pd.DataFrame(all_orders)
     line_items_df = pd.DataFrame(all_line_items)
+
+    if outside_window:
+        logger.info(
+            f'Dropped {len(outside_window)} order(s) whose {store_timezone} date '
+            f'falls outside {start_date}..{end_date}: '
+            f'{sorted(set(outside_window))}')
+
+    # Compare what we are about to return against Shopify's own totals before
+    # anything is written. A mismatch means the export is wrong, so it fails
+    # rather than writing quietly.
+    problems = reconcile_shopify_export(kept_payload, orders_df, line_items_df)
+    if problems:
+        for problem in problems:
+            logger.error(f'Reconciliation: {problem}')
+        raise ValueError(
+            f'Export does not reconcile against the Shopify API '
+            f'({len(problems)} discrepancy/ies); refusing to continue')
+    logger.info(f'Reconciled against the Shopify API: {len(orders_df)} order(s), '
+                f'{len(line_items_df)} line(s), order totals agree')
 
     logger.info(f"Total orders retrieved: {len(orders_df)}")
     logger.info(f"Total line items retrieved: {len(line_items_df)}")
