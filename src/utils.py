@@ -419,6 +419,92 @@ def latest_partition(table: str, database: str, region: str,
     return max(values) if values else None
 
 
+class SchemaDriftError(RuntimeError):
+    """A Glue table's columns cannot be reconciled by appending.
+
+    Raised rather than repaired, because the two ways this happens - a column
+    renamed or retyped in place, or a column inserted mid-list - both mean the
+    CSV files and the table definition disagree about what each field position
+    holds. Adding more columns on top would bury that, not fix it.
+    """
+
+
+DDL_COLUMN_BLOCK = (
+    r'CREATE EXTERNAL TABLE IF NOT EXISTS {table} \((.*?)\n\)\s*\nPARTITIONED BY')
+
+
+def ddl_columns(ddl_path: str, table: str) -> List[Tuple[str, str]]:
+    """Parse (name, type) for one CREATE EXTERNAL TABLE block in a DDL file.
+
+    The checked-in DDL is the single source of truth for column order, and
+    tests assert the Pydantic models agree with it, so deriving the expected
+    schema from here keeps one definition rather than three.
+    """
+    text = open(ddl_path).read()
+    match = re.search(DDL_COLUMN_BLOCK.format(table=re.escape(table)), text, re.S)
+    if not match:
+        raise ValueError(f'No CREATE EXTERNAL TABLE block for {table} in {ddl_path}')
+
+    columns = []
+    for line in match.group(1).splitlines():
+        line = line.strip()
+        if not line or line.startswith('--'):
+            continue
+        parts = line.split()
+        columns.append((parts[0], parts[1].rstrip(',').lower()))
+    return columns
+
+
+def ensure_table_columns(table: str, database: str, region: str, bucket: str,
+                         expected: List[Tuple[str, str]]) -> List[str]:
+    """Append any columns the table is missing, and return their names.
+
+    The extract writes headerless CSV, so Athena maps file position to column
+    position. Adding a field to the extract without adding it to the table
+    means the extra values are silently discarded; every run looks green and
+    the column is simply never populated. Rather than leave that to a
+    migration somebody has to remember to run, the job reconciles its own
+    schema on every run, the same way it already repairs its own partitions.
+
+    Idempotent: a no-op once the table matches.
+    """
+    glue_client = boto3.client('glue',
+                               region_name=region,
+                               aws_access_key_id=AWS_ACCESS_KEY_ID,
+                               aws_secret_access_key=AWS_SECRET_ACCESS_KEY)
+
+    table_meta = glue_client.get_table(DatabaseName=database, Name=table)['Table']
+    current = [(column['Name'], column['Type'].lower())
+               for column in table_meta['StorageDescriptor']['Columns']]
+
+    if current == expected[:len(current)]:
+        missing = expected[len(current):]
+    else:
+        divergence = next(
+            (i for i, pair in enumerate(current)
+             if i >= len(expected) or expected[i] != pair), len(current))
+        raise SchemaDriftError(
+            f'{database}.{table} column {divergence} is '
+            f'{current[divergence] if divergence < len(current) else "absent"}, '
+            f'expected {expected[divergence] if divergence < len(expected) else "absent"}. '
+            f'Columns can only be appended; this table has diverged and needs '
+            f'a hand-written migration.')
+
+    if not missing:
+        logger.info(f'{database}.{table}: schema up to date ({len(current)} columns)')
+        return []
+
+    additions = ', '.join(f'{name} {type_}' for name, type_ in missing)
+    logger.info(f'{database}.{table}: adding column(s) {additions}')
+    run_athena_query_no_results(
+        bucket=bucket,
+        query=f'ALTER TABLE {table} ADD COLUMNS ({additions})',
+        database=database,
+        region=region)
+
+    return [name for name, _ in missing]
+
+
 def validate_dataframe(
         df: pd.DataFrame, model: Type[BaseModel]
 ) -> Tuple[List[BaseModel], List[Tuple[dict, str]]]:

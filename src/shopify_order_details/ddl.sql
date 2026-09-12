@@ -1,9 +1,13 @@
 -- Schema for the two tables written by src/shopify_order_details/main.py.
 --
 -- These tables were created by hand and had no DDL in the repo, which is how
--- the column set drifted from what the extract actually needs. This file is
--- now the reference. It is NOT run by the job; use migration_2026_09.sql to
--- change the live tables.
+-- the column set drifted from what the extract actually needs.
+--
+-- This file is the single source of truth for the column set and its order.
+-- main.py parses it on every run and appends any column the live Glue table
+-- is missing, so adding a column here and to the matching Pydantic model is
+-- all that is needed to ship a schema change. There is no separate migration
+-- to remember.
 --
 -- Column order is load-bearing. The job writes CSV with columns in Pydantic
 -- field-definition order (models.ShopifyOrder / models.ShopifyLineItem), and

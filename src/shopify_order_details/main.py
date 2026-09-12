@@ -87,11 +87,30 @@ def main():
     if not s3_bucket:
         raise ValueError("SHOPIFY_API_KEY environment variable is not set")
 
-    # Get shopify api pw 
+    # Get shopify api pw
     SHOPIFY_API_PW = os.environ.get('SHOPIFY_API_PW')
     if not s3_bucket:
         raise ValueError("SHOPIFY_API_PASSWORD environment variable is not set")
 
+    # -----------------
+    # Reconcile the Glue schema before writing anything
+    # -----------------
+    # The CSV is headerless, so Athena maps file position to column position.
+    # If the extract writes a column the table does not declare, the value is
+    # silently discarded and the run still looks green. Reconciling here - the
+    # same way this job already repairs its own partitions - means a schema
+    # change ships with the code instead of waiting on someone to remember a
+    # migration. Idempotent, so it is a no-op on every run after the first.
+    ddl_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ddl.sql')
+    for table in ('shopify_orders', 'shopify_line_items'):
+        added = ensure_table_columns(
+            table=table,
+            database=glue_database,
+            region=REGION,
+            bucket=s3_bucket,
+            expected=ddl_columns(ddl_path, table))
+        if added:
+            logger.info(f'{table}: added column(s) {added}')
 
     # Iterate through all dates in the date range
     while pd.to_datetime(start_date) <= pd.to_datetime(end_date):
