@@ -687,6 +687,90 @@ def send_sns_alert(message, topic_arn, subject, region):
         raise ValueError(f'Error sending SNS alert! {str(e)}')
 
 
+def shopify_order_record(order: dict) -> dict:
+    """Flatten one Shopify order into the shopify_orders row.
+
+    Field order here is the CSV column order, which must match the Glue table.
+    New fields therefore go at the END - inserting one in the middle shifts
+    every later column in the file while the table definition stays put, and
+    Athena silently reads the wrong values into the wrong columns.
+
+    `order_id` is Shopify's `order_number`, not its internal `id`, because
+    order_number is what ShipBob records and what the two systems join on.
+    The internal id is kept separately as `shopify_order_id`.
+    """
+    import pandas as pd
+
+    created_at = order.get('created_at')
+    shipping_info = order.get('shipping_address') or {}
+    customer = order.get('customer') or {}
+
+    return {
+        'order_id': order.get('order_number'),
+        'email': order.get('email'),
+        'created_at': created_at,
+        'shipping_address': shipping_info.get('address1'),
+        'shipping_city': shipping_info.get('city'),
+        'shipping_province': shipping_info.get('province'),
+        'shipping_country': shipping_info.get('country'),
+        'subtotal_price': order.get('subtotal_price'),
+        'total_line_items_price': order.get('total_line_items_price'),
+        'total_tax': order.get('total_tax'),
+        'total_discounts': order.get('total_discounts'),
+        'total_shipping_fee': order.get('total_shipping_price_set', {}).get(
+            'shop_money', {}).get('amount'),
+        'total_price': order.get('total_price'),
+        'order_date': pd.to_datetime(created_at).strftime('%Y-%m-%d') if created_at else None,
+        # --- appended 2026-09: stable identifiers and order state ---
+        'shopify_order_id': order.get('id'),
+        'customer_id': customer.get('id'),
+        'is_test': bool(order.get('test', False)),
+        'financial_status': order.get('financial_status'),
+        'fulfillment_status': order.get('fulfillment_status'),
+        'cancelled_at': order.get('cancelled_at'),
+        'tags': order.get('tags'),
+    }
+
+
+def shopify_line_item_records(order: dict) -> List[dict]:
+    """Flatten one Shopify order into its shopify_line_items rows.
+
+    `variant_id` is the durable product identity. sku, title and variant_title
+    are all merchant-editable: the same physical product has been sold under
+    several names, carries marketing text such as PRE-ORDER in its title, and
+    reuses or omits its sku. variant_id does not change.
+
+    As with orders, new fields are appended rather than inserted.
+    """
+    created_at = order.get('created_at')
+    order_id = order.get('order_number')
+    email = order.get('email')
+    order_date = None
+    if created_at:
+        import pandas as pd
+        order_date = pd.to_datetime(created_at).strftime('%Y-%m-%d')
+
+    records = []
+    for line_item in order.get('line_items') or []:
+        records.append({
+            'order_id': order_id,
+            'email': email,
+            'created_at': created_at,
+            'order_date': order_date,
+            'price': line_item.get('price'),
+            'quantity': line_item.get('quantity'),
+            'sku': line_item.get('sku'),
+            'title': line_item.get('title'),
+            'variant_title': line_item.get('variant_title'),
+            'line_item_name': line_item.get('name'),
+            # --- appended 2026-09: stable identifiers and line-level discount ---
+            'variant_id': line_item.get('variant_id'),
+            'product_id': line_item.get('product_id'),
+            'line_discount': line_item.get('total_discount'),
+        })
+    return records
+
+
 def get_shopify_orders_by_date(
     shopify_api_key: str,
     shopify_api_pw: str,
@@ -747,55 +831,8 @@ def get_shopify_orders_by_date(
 
         # Build out the orders and line items records
         for order in orders:
-            order_id   = order.get('order_number')
-            created_at = order.get('created_at')
-            email      = order.get('email')
-
-            # Convert created_at to YYYY-MM-DD
-            order_date = pd.to_datetime(created_at).strftime('%Y-%m-%d') if created_at else None
-
-            # Parse shipping details
-            shipping_info = {} if order.get('shipping_address',{}) == None else order.get('shipping_address',{})
-            
-            shipping_address = shipping_info.get('address1', None) 
-            shipping_city = shipping_info.get('city',None)
-            shipping_province = shipping_info.get('province',None)
-            shipping_country = shipping_info.get('country',None)
-
-            # Build an order record
-            all_orders.append({
-                'order_id': order_id,
-                'email': email,
-                'created_at': created_at,
-                'order_date': order_date,
-                'subtotal_price': order.get('subtotal_price'),
-                'total_line_items_price': order.get('total_line_items_price'),
-                'total_tax': order.get('total_tax'),
-                'total_discounts': order.get('total_discounts'),
-                'total_shipping_fee': order.get('total_shipping_price_set', {}).get('shop_money', {}).get('amount'),
-                'total_price': order.get('total_price'),
-                'shipping_address': shipping_address,
-                'shipping_city': shipping_city,
-                'shipping_province': shipping_province,
-                'shipping_country': shipping_country
-            })
-
-
-            # Collect line items for each order
-            for line_item in order.get('line_items', []):
-                line_items_record = {
-                    'order_id': order_id,
-                    'email': email,
-                    'created_at': created_at,
-                    'order_date': order_date,
-                    'price': line_item.get('price'),
-                    'quantity': line_item.get('quantity'),
-                    'sku': line_item.get('sku'),
-                    'title': line_item.get('title'),
-                    'variant_title': line_item.get('variant_title'),
-                    'line_item_name': line_item.get('name')
-                }
-                all_line_items.append(line_items_record)
+            all_orders.append(shopify_order_record(order))
+            all_line_items.extend(shopify_line_item_records(order))
 
         # Pagination: check the 'Link' header for rel="next"
         link_header = response.headers.get('Link', '')
