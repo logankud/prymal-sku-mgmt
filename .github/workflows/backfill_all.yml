@@ -118,24 +118,10 @@ jobs:
           LOOKBACK: ${{ github.event.inputs.lookback_days }}
         run: |
           echo "====== Tier 3: prymal_agent aggregations (lookback=${LOOKBACK}d) ======"
-
-          MISSING=$(python3 src/gap_detector.py \
-            --table shipbob_current_inventory \
-            --date_col partition_date \
-            --database $GLUE_DATABASE_NAME_AGENT \
-            --lookback_days $LOOKBACK 2>/dev/null || true)
-
-          if [ -n "$MISSING" ]; then
-            echo "Missing dates: $MISSING"
-            for dt in $MISSING; do
-              echo "  backfilling $dt"
-              python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_retention_by_cohort_month --partition_date $dt
-              python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_daily_order_cnt_by_channel  --partition_date $dt
-              python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_orders_obfuscated           --partition_date $dt
-              python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_current_inventory           --partition_date $dt
-            done
-          else
-            echo "  no gaps"
-          fi
+          # One gap check per partitioned table. Retention and the obfuscated
+          # line-item table are full recomputes as of the run date and are
+          # produced by the daily agent workflow instead.
+          src/prymal_agent/backfill.sh src/prymal_agent/shipbob_daily_order_cnt_by_channel shipbob_daily_order_cnt_by_channel order_date "$LOOKBACK"
+          src/prymal_agent/backfill.sh src/prymal_agent/shipbob_current_inventory shipbob_current_inventory partition_date "$LOOKBACK"
 
       - run: echo "Backfill complete — job status ${{ job.status }}"

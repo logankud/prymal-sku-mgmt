@@ -8,4 +8,4 @@ WHERE DATE(order_date) = DATE '${RUN_DATE}'
 GROUP BY
   CAST(channel_id   AS VARCHAR),
   CAST(channel_name AS VARCHAR),
-  CAST(order_date   AS DATE);
+  CAST(order_date   AS DATE)

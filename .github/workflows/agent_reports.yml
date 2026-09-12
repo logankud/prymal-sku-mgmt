@@ -28,7 +28,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Auto-backfill missing dates for all prymal_agent sub-jobs
+      # Each partitioned table gets its own gap check over the last 7 days.
+      # Retention is a full recompute "as of" the run date, so it is not
+      # backfilled; relabelling today's answer with an old date would mislead.
+      - name: Auto-backfill missing dates for partitioned prymal_agent tables
         env:
           AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
           AWS_ACCESS_SECRET: ${{ secrets.AWS_ACCESS_SECRET }}
@@ -36,49 +39,33 @@ jobs:
           GLUE_DATABASE_NAME: ${{ secrets.GLUE_DATABASE_NAME }}
           GLUE_DATABASE_NAME_AGENT: ${{ secrets.GLUE_DATABASE_NAME_AGENT }}
         run: |
-          if [ -z "$GLUE_DATABASE_NAME_AGENT" ]; then
-            echo "-------- WARNING: GLUE_DATABASE_NAME_AGENT is not set — skipping auto-backfill"
-          else
-            MISSING_DATES=$(python3 src/gap_detector.py \
-              --table shipbob_current_inventory \
-              --date_col partition_date \
-              --database $GLUE_DATABASE_NAME_AGENT \
-              --lookback_days 7 2>/dev/null || true)
-            if [ -n "$MISSING_DATES" ]; then
-              echo "-------- Auto-backfill: missing dates detected: $MISSING_DATES"
-              for dt in $MISSING_DATES; do
-                echo "-------- Backfilling $dt for all sub-jobs"
-                python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_retention_by_cohort_month --partition_date $dt
-                python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_daily_order_cnt_by_channel --partition_date $dt
-                python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_orders_obfuscated --partition_date $dt
-                python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_current_inventory --partition_date $dt
-              done
-            else
-              echo "-------- Auto-backfill: no missing dates in the last 7 days"
-            fi
-          fi
+          src/prymal_agent/backfill.sh src/prymal_agent/shipbob_daily_order_cnt_by_channel shipbob_daily_order_cnt_by_channel order_date 7
+          src/prymal_agent/backfill.sh src/prymal_agent/shipbob_current_inventory shipbob_current_inventory partition_date 7
 
+      # The sub-jobs below are independent, so a failure in one must not
+      # skip the others. The job still reports failure if any step fails.
       - name: Run job - shipbob_retention_by_cohort_month
+        if: ${{ !cancelled() }}
         env:
           AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
           AWS_ACCESS_SECRET: ${{ secrets.AWS_ACCESS_SECRET }}
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
           GLUE_DATABASE_NAME: ${{ secrets.GLUE_DATABASE_NAME }}
           GLUE_DATABASE_NAME_AGENT: ${{ secrets.GLUE_DATABASE_NAME_AGENT }}
-        working-directory: src/prymal_agent/shipbob_retention_by_cohort_month
-        run: python main.py
+        run: python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_retention_by_cohort_month
 
       - name: Run job - shipbob_daily_order_cnt_by_channel
+        if: ${{ !cancelled() }}
         env:
           AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
           AWS_ACCESS_SECRET: ${{ secrets.AWS_ACCESS_SECRET }}
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
           GLUE_DATABASE_NAME: ${{ secrets.GLUE_DATABASE_NAME }}
           GLUE_DATABASE_NAME_AGENT: ${{ secrets.GLUE_DATABASE_NAME_AGENT }}
-        working-directory: src/prymal_agent/shipbob_daily_order_cnt_by_channel
-        run: python main.py
+        run: python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_daily_order_cnt_by_channel
 
       - name: Run job - shipbob_orders_obfuscated
+        if: ${{ !cancelled() }}
         env:
           AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
           AWS_ACCESS_SECRET: ${{ secrets.AWS_ACCESS_SECRET }}
@@ -89,6 +76,7 @@ jobs:
         run: python main.py
 
       - name: Run job - shipbob_current_inventory
+        if: ${{ !cancelled() }}
         env:
           AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
           AWS_ACCESS_SECRET: ${{ secrets.AWS_ACCESS_SECRET }}

@@ -1,0 +1,15 @@
+table:
+  name: "shipbob_daily_order_cnt_by_channel"
+  description: "Total orders placed per day per sales channel, extracted from ShipBob (the 3PL and order management solution used by Prymal). Partitioned by order_date (the date the order was placed)."
+  partition_column: "order_date"
+
+columns:
+  - name: "channel_id"
+    type: "string"
+    comment: "ShipBob sales channel id. The Shopify store and the Amazon marketplace are separate channels"
+  - name: "channel_name"
+    type: "string"
+    comment: "ShipBob sales channel name. The Amazon channel is named by its marketplace id"
+  - name: "order_cnt"
+    type: "int"
+    comment: "Number of distinct orders placed on order_date through this channel"

@@ -91,25 +91,12 @@ backfill_run_rate() {
 
 # ── helper: backfill prymal_agent sub-jobs ───────────────────────────────────
 backfill_agent() {
-    section "Gap check: prymal_agent / shipbob_current_inventory (lookback=${LOOKBACK}d)"
-    AGENT_DB=${GLUE_DATABASE_NAME_AGENT:-}
-    if [ -z "$AGENT_DB" ]; then
-        echo "  WARNING: GLUE_DATABASE_NAME_AGENT not set — skipping prymal_agent backfill"
-        return
-    fi
-    MISSING=$(python3 src/gap_detector.py --table shipbob_current_inventory --date_col partition_date --database "$AGENT_DB" --lookback_days "$LOOKBACK" 2>/dev/null || true)
-    if [ -n "$MISSING" ]; then
-        echo "  Missing dates: $MISSING"
-        for dt in $MISSING; do
-            echo "  → backfilling $dt for all prymal_agent sub-jobs"
-            python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_retention_by_cohort_month --partition_date "$dt"
-            python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_daily_order_cnt_by_channel  --partition_date "$dt"
-            python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_orders_obfuscated           --partition_date "$dt"
-            python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_current_inventory           --partition_date "$dt"
-        done
-    else
-        echo "  No gaps found."
-    fi
+    # One gap check per partitioned table. Retention and the obfuscated
+    # line-item table are full recomputes as of the run date, so they are
+    # produced by the daily workflow rather than backfilled per date.
+    section "Gap check: prymal_agent partitioned tables (lookback=${LOOKBACK}d)"
+    src/prymal_agent/backfill.sh src/prymal_agent/shipbob_daily_order_cnt_by_channel shipbob_daily_order_cnt_by_channel order_date "$LOOKBACK"
+    src/prymal_agent/backfill.sh src/prymal_agent/shipbob_current_inventory shipbob_current_inventory partition_date "$LOOKBACK"
 }
 
 # =============================================================================

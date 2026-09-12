@@ -43,6 +43,38 @@ def test_only_known_placeholders(path):
     assert not unknown, f'{path.name} uses placeholders nobody renders: {sorted(unknown)}'
 
 
+REPO = AGENT_DIR.parent.parent
+
+
+def _runner_job_dirs():
+    """Every --job_dir the workflows and backfill scripts hand to the runner."""
+    sources = list((REPO / '.github' / 'workflows').glob('*.yml'))
+    sources += [REPO / 'src' / 'backfill_all.sh', AGENT_DIR / 'backfill.sh']
+    found = set()
+    for path in sources:
+        found.update(re.findall(r'(?:--job_dir|backfill\.sh)\s+(src/prymal_agent/\S+)', path.read_text()))
+    return sorted(found)
+
+
+@pytest.mark.parametrize('job_dir', _runner_job_dirs())
+def test_runner_job_dirs_are_configured(job_dir):
+    """The runner raises FileNotFoundError without config.yml and
+    select_query.sql; catch that here instead of in a scheduled run."""
+    for required in ('config.yml', 'select_query.sql'):
+        assert (REPO / job_dir / required).exists(), f'{job_dir} is missing {required}'
+
+
+@pytest.mark.parametrize('path', sorted(AGENT_DIR.glob('*/select_query.sql')),
+                         ids=lambda p: p.parent.name)
+def test_select_query_is_embeddable_in_ctas(path):
+    """select_query.sql is spliced into CREATE TABLE ... AS <query>; a trailing
+    semicolon or ORDER BY would break the statement."""
+    body = re.sub(r'--[^\n]*', '', path.read_text()).strip()
+    assert not body.endswith(';'), f'{path} must not end with a semicolon'
+    assert not re.search(r'\bORDER\s+BY\b[^)]*$', body, re.IGNORECASE), \
+        f'{path} ends with ORDER BY, which is meaningless inside CTAS'
+
+
 def test_agent_workflow_does_not_call_missing_main():
     """Every `python main.py` step in the agent workflow must run in a directory
     that actually has a main.py; config-only jobs go through the runner."""
