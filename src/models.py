@@ -32,6 +32,10 @@ class ShopifyLineItem(BaseModel):
         None, description="Shopify product ID that the variant belongs to")
     line_discount: float = Field(
         0.0, ge=0, description="Discount allocated to this line item")
+    created_at_utc: Optional[datetime] = Field(
+        None,
+        description="created_at as UTC, for joining to systems that stamp in "
+                    "UTC such as ShipBob")
 
     @field_validator('variant_id', 'product_id', mode='before')
     @classmethod
@@ -142,6 +146,10 @@ class ShopifyOrder(BaseModel):
         None, description="When the order was cancelled, null if it was not")
     tags: Optional[str] = Field(
         None, description="Comma-separated Shopify order tags")
+    created_at_utc: Optional[datetime] = Field(
+        None,
+        description="created_at as UTC, for joining to systems that stamp in "
+                    "UTC such as ShipBob")
 
     @field_validator('shopify_order_id', 'customer_id', mode='before')
     @classmethod

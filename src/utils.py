@@ -860,6 +860,75 @@ def _shopify_local_timestamp(created_at, store_timezone: str = None):
     return stamp.tz_convert(store_timezone).strftime('%Y-%m-%d %H:%M:%S')
 
 
+def reconcile_shopify_export(api_orders: List[dict], orders_df, line_items_df,
+                             tolerance: float = 0.01) -> List[str]:
+    """Check the exported frames against the API payload they were built from.
+
+    Every other test in this repo compares the extract against a fixture
+    written by hand, which only proves the code does what its author intended.
+    This compares it against Shopify's own numbers, using
+    `total_line_items_price` as an independent witness: Shopify computes it, we
+    never read it into a line, and the admin UI reports from the same field. If
+    our per-line price and quantity sum to it, the line extraction is right.
+
+    Returns a list of discrepancies, empty when the export matches.
+    """
+    problems = []
+    api_by_id = {order.get('order_number'): order for order in api_orders}
+
+    exported = list(orders_df['order_id']) if len(orders_df) else []
+    if len(exported) != len(set(exported)):
+        problems.append(f'{len(exported) - len(set(exported))} duplicate order(s) exported')
+
+    missing = set(api_by_id) - set(exported)
+    extra = set(exported) - set(api_by_id)
+    if missing:
+        problems.append(f'{len(missing)} order(s) in the API response were not exported: '
+                        f'{sorted(missing)[:5]}')
+    if extra:
+        problems.append(f'{len(extra)} exported order(s) are not in the API response: '
+                        f'{sorted(extra)[:5]}')
+
+    for order_id, api_order in api_by_id.items():
+        api_lines = api_order.get('line_items') or []
+        if len(line_items_df):
+            ours = line_items_df[line_items_df['order_id'] == order_id]
+        else:
+            ours = line_items_df
+
+        if len(ours) != len(api_lines):
+            problems.append(f'order {order_id}: exported {len(ours)} line(s), '
+                            f'API returned {len(api_lines)}')
+            continue
+
+        our_gross = sum(float(price) * int(quantity)
+                        for price, quantity in zip(ours['price'], ours['quantity']))
+        api_gross = float(api_order.get('total_line_items_price') or 0)
+        if abs(our_gross - api_gross) > tolerance:
+            problems.append(
+                f'order {order_id}: exported lines sum to {our_gross:.2f} but '
+                f'Shopify reports total_line_items_price {api_gross:.2f}')
+
+    return problems
+
+
+def _shopify_utc_timestamp(created_at, store_timezone: str = None):
+    """created_at as UTC wall-clock time.
+
+    Derived from the original offset-bearing value rather than from the
+    local-time rendering, because a local wall time is ambiguous during the
+    hour that daylight saving repeats.
+    """
+    if not created_at:
+        return None
+    stamp = pd.to_datetime(created_at)
+    if stamp.tzinfo is None:
+        if not store_timezone:
+            return None
+        stamp = stamp.tz_localize(store_timezone)
+    return stamp.tz_convert('UTC').strftime('%Y-%m-%d %H:%M:%S')
+
+
 def _shopify_order_date(created_at, store_timezone: str = None):
     """created_at as a calendar date. Converted to the store's timezone when
     one is given; otherwise read in whatever offset the string carries."""
@@ -909,6 +978,7 @@ def shopify_order_record(order: dict, store_timezone: str = None) -> dict:
         'fulfillment_status': order.get('fulfillment_status'),
         'cancelled_at': order.get('cancelled_at'),
         'tags': order.get('tags'),
+        'created_at_utc': _shopify_utc_timestamp(created_at, store_timezone),
     }
 
 
@@ -926,6 +996,7 @@ def shopify_line_item_records(order: dict, store_timezone: str = None) -> List[d
     email = order.get('email')
     order_date = _shopify_order_date(created_at, store_timezone)
 
+    created_at_utc = _shopify_utc_timestamp(created_at, store_timezone)
     created_at = _shopify_local_timestamp(created_at, store_timezone)
 
     records = []
@@ -945,6 +1016,7 @@ def shopify_line_item_records(order: dict, store_timezone: str = None) -> List[d
             'variant_id': line_item.get('variant_id'),
             'product_id': line_item.get('product_id'),
             'line_discount': line_item.get('total_discount'),
+            'created_at_utc': created_at_utc,
         })
     return records
 
@@ -1044,6 +1116,7 @@ def get_shopify_orders_by_date(
     all_orders = []
     all_line_items = []
     outside_window = []
+    kept_payload = []
 
     while True:
         logger.info(f"Fetching: {url} with params={params}")
@@ -1068,6 +1141,7 @@ def get_shopify_orders_by_date(
             if not start_date <= local_date <= end_date:
                 outside_window.append(local_date)
                 continue
+            kept_payload.append(order)
             all_orders.append(shopify_order_record(order, store_timezone))
             all_line_items.extend(shopify_line_item_records(order, store_timezone))
 
@@ -1116,6 +1190,19 @@ def get_shopify_orders_by_date(
             f'Dropped {len(outside_window)} order(s) whose {store_timezone} date '
             f'falls outside {start_date}..{end_date}: '
             f'{sorted(set(outside_window))}')
+
+    # Compare what we are about to return against Shopify's own totals before
+    # anything is written. A mismatch means the export is wrong, so it fails
+    # rather than writing quietly.
+    problems = reconcile_shopify_export(kept_payload, orders_df, line_items_df)
+    if problems:
+        for problem in problems:
+            logger.error(f'Reconciliation: {problem}')
+        raise ValueError(
+            f'Export does not reconcile against the Shopify API '
+            f'({len(problems)} discrepancy/ies); refusing to continue')
+    logger.info(f'Reconciled against the Shopify API: {len(orders_df)} order(s), '
+                f'{len(line_items_df)} line(s), order totals agree')
 
     logger.info(f"Total orders retrieved: {len(orders_df)}")
     logger.info(f"Total line items retrieved: {len(line_items_df)}")

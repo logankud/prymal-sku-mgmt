@@ -34,7 +34,8 @@ CREATE EXTERNAL TABLE IF NOT EXISTS shopify_orders (
     financial_status        STRING    COMMENT 'paid, pending, refunded, partially_refunded, voided',
     fulfillment_status      STRING    COMMENT 'fulfilled, partial, restocked, or null when unfulfilled',
     cancelled_at            TIMESTAMP COMMENT 'When the order was cancelled, null if it was not',
-    tags                    STRING    COMMENT 'Comma-separated Shopify order tags'
+    tags                    STRING    COMMENT 'Comma-separated Shopify order tags',
+    created_at_utc          TIMESTAMP COMMENT 'created_at as UTC. Use this to join to systems that stamp in UTC, such as ShipBob; use created_at to match the Shopify admin UI'
 )
 PARTITIONED BY (year STRING, month STRING, day STRING)
 ROW FORMAT DELIMITED
@@ -57,7 +58,8 @@ CREATE EXTERNAL TABLE IF NOT EXISTS shopify_line_items (
     line_item_name  STRING COMMENT 'Full display name of the line item',
     variant_id      BIGINT COMMENT 'Shopify variant id. The durable product identity: unchanged by renames, repricing and title edits. Null for lines with no variant, such as gift cards',
     product_id      BIGINT COMMENT 'Shopify product id that the variant belongs to',
-    line_discount   DOUBLE COMMENT 'Discount allocated to this line item'
+    line_discount   DOUBLE COMMENT 'Discount allocated to this line item',
+    created_at_utc  TIMESTAMP COMMENT 'created_at as UTC. Use this to join to systems that stamp in UTC, such as ShipBob; use created_at to match the Shopify admin UI'
 )
 PARTITIONED BY (year STRING, month STRING, day STRING)
 ROW FORMAT DELIMITED
