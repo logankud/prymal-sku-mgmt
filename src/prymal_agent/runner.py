@@ -5,8 +5,8 @@ Handles all common logic that was previously in individual main.py files
 """
 
 import os
+import re
 import sys
-from numpy import partition
 import yaml
 from datetime import datetime, timedelta
 from loguru import logger
@@ -20,11 +20,18 @@ sys.path.append(os.path.join(workspace_root, 'src'))
 
 from utils import run_athena_query_no_results, delete_s3_data
 
+import pii_guard
+from sql_macros import expand_macros
+
 
 class TableConfig(BaseModel):
     name: str
     description: str
     partition_column: str
+    # Set only when the table genuinely needs a column the PII guard flags.
+    # Reviewers see the exception in the diff rather than nothing at all.
+    allow_sensitive: bool = False
+    allow_sensitive_reason: str = ''
 
     @field_validator('description')
     @classmethod
@@ -74,9 +81,21 @@ class JobRunner:
         # Attempt to validate using the JobConfig model
         try:
             validated_config = JobConfig(**config_data)
-            return validated_config
         except Exception as e:
             raise ValueError("Configuration validation error: " + str(e))
+
+        # prymal_agent is exposed to an agent, so no job may land a column that
+        # looks like personal data without saying so out loud.
+        pii_guard.check(
+            [column.name for column in validated_config.columns],
+            table=validated_config.table.name,
+            allow_sensitive=validated_config.table.allow_sensitive)
+        if validated_config.table.allow_sensitive:
+            logger.warning(
+                f'{validated_config.table.name}: PII guard bypassed - '
+                f'{validated_config.table.allow_sensitive_reason or "no reason given"}')
+
+        return validated_config
 
     def _load_run_date(self, partition_date):
         """Load run_date based on provided partition_date"""
@@ -135,6 +154,18 @@ class JobRunner:
         # Replace variables in the query
         for var, replacement in replacements.items():
             query_template = query_template.replace(var, replacement)
+
+        # Macros last: the expansion embeds the salt, which must not then be
+        # rescanned for placeholders.
+        query_template = expand_macros(query_template)
+
+        # A placeholder that nothing filled would reach Athena as literal
+        # "${FOO}" and fail there, or worse, land in a table name. Catch typos
+        # here instead.
+        leftover = re.findall(r'\$\{[A-Z_]+[^}]*\}', query_template)
+        if leftover:
+            raise ValueError(
+                f'{sql_file_path}: unrendered placeholder(s) {sorted(set(leftover))}')
 
         return query_template
 
@@ -195,6 +226,33 @@ class JobRunner:
                 f"Drop staging table template not found: {path}")
         return path
 
+    def _staging_prefix(self):
+        return (f"staging/prymal_agent/{self.config.table.name}/"
+                f"{self.config.table.partition_column}={self.run_date}/")
+
+    def rendered_statements(self):
+        """Every statement this job would run, in order, without executing.
+
+        Lets a SQL change be reviewed from CI output rather than from the
+        failure of a scheduled run.
+        """
+        select_query = self._populate_sql_template(self._get_select_query_template())
+        return [
+            ('1. create final table',
+             self._populate_sql_template(self._get_ddl_template())),
+            ('2. delete staging s3 data',
+             f'-- delete s3://{self.s3_bucket}/{self._staging_prefix()}'),
+            ('3. drop staging table',
+             self._populate_sql_template(self._get_drop_staging_template())),
+            ('4. create staging table',
+             self._populate_sql_template(self._get_create_staging_template(),
+                                         select_query=select_query)),
+            ('5. drop partition from final table',
+             self._populate_sql_template(self._get_drop_partition_template())),
+            ('6. add partition to final table',
+             self._populate_sql_template(self._get_add_partition_template())),
+        ]
+
     def run_job(self, partition_date: None):
         """
         Run a standardized job workflow for partitioned table with staging
@@ -219,8 +277,7 @@ class JobRunner:
 
         logger.info("Step 2: Delete old staging S3 data if exists")
         logger.info('*' * 60)
-        staging_prefix = f"staging/prymal_agent/{self.config.table.name}/{self.config.table.partition_column}={self.run_date}/"
-        delete_s3_data(bucket=self.s3_bucket, prefix=staging_prefix)
+        delete_s3_data(bucket=self.s3_bucket, prefix=self._staging_prefix())
 
         logger.info("*" * 60)
 

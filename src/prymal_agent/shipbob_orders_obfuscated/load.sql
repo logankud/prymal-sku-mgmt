@@ -16,8 +16,8 @@ WITH all_data AS (
     )
 )
 SELECT
-  -- deterministic hashes
-  to_hex(sha256(to_utf8(lower(coalesce(customer_email, '')))))         AS customer_hash,
+  -- The one sanctioned customer identity; see src/prymal_agent/sql_macros.py
+  ${CUSTOMER_KEY(customer_email)}                                      AS customer_key,
   to_hex(sha256(to_utf8(cast(shipbob_order_id AS varchar))))           AS shipbob_order_id_hash,
 
   -- masking

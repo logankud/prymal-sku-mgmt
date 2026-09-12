@@ -38,6 +38,7 @@ jobs:
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
           GLUE_DATABASE_NAME: ${{ secrets.GLUE_DATABASE_NAME }}
           GLUE_DATABASE_NAME_AGENT: ${{ secrets.GLUE_DATABASE_NAME_AGENT }}
+          CUSTOMER_KEY_SALT: ${{ secrets.CUSTOMER_KEY_SALT }}
         run: |
           src/prymal_agent/backfill.sh src/prymal_agent/shipbob_daily_order_cnt_by_channel shipbob_daily_order_cnt_by_channel order_date 7
           src/prymal_agent/backfill.sh src/prymal_agent/shipbob_current_inventory shipbob_current_inventory partition_date 7
@@ -52,6 +53,7 @@ jobs:
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
           GLUE_DATABASE_NAME: ${{ secrets.GLUE_DATABASE_NAME }}
           GLUE_DATABASE_NAME_AGENT: ${{ secrets.GLUE_DATABASE_NAME_AGENT }}
+          CUSTOMER_KEY_SALT: ${{ secrets.CUSTOMER_KEY_SALT }}
         run: python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_retention_by_cohort_month
 
       - name: Run job - shipbob_daily_order_cnt_by_channel
@@ -62,6 +64,7 @@ jobs:
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
           GLUE_DATABASE_NAME: ${{ secrets.GLUE_DATABASE_NAME }}
           GLUE_DATABASE_NAME_AGENT: ${{ secrets.GLUE_DATABASE_NAME_AGENT }}
+          CUSTOMER_KEY_SALT: ${{ secrets.CUSTOMER_KEY_SALT }}
         run: python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_daily_order_cnt_by_channel
 
       - name: Run job - shipbob_orders_obfuscated
@@ -72,6 +75,7 @@ jobs:
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
           GLUE_DATABASE_NAME: ${{ secrets.GLUE_DATABASE_NAME }}
           GLUE_DATABASE_NAME_AGENT: ${{ secrets.GLUE_DATABASE_NAME_AGENT }}
+          CUSTOMER_KEY_SALT: ${{ secrets.CUSTOMER_KEY_SALT }}
         working-directory: src/prymal_agent/shipbob_orders_obfuscated
         run: python main.py
 
@@ -83,6 +87,7 @@ jobs:
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
           GLUE_DATABASE_NAME: ${{ secrets.GLUE_DATABASE_NAME }}
           GLUE_DATABASE_NAME_AGENT: ${{ secrets.GLUE_DATABASE_NAME_AGENT }}
+          CUSTOMER_KEY_SALT: ${{ secrets.CUSTOMER_KEY_SALT }}
         run: python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_current_inventory
 
       - run: echo "Job status - ${{ job.status }}."

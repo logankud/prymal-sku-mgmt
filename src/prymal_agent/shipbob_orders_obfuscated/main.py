@@ -8,8 +8,10 @@ from datetime import datetime
 script_dir = os.path.dirname(os.path.abspath(__file__))
 workspace_root = os.path.dirname(os.path.dirname(os.path.dirname(script_dir)))
 sys.path.append(os.path.join(workspace_root, 'src'))
+sys.path.append(os.path.join(workspace_root, 'src', 'prymal_agent'))
 
 from utils import run_athena_query_no_results
+from sql_macros import expand_macros
 
 current_ts = datetime.now()
 run_date = (current_ts - timedelta(hours=24) -
@@ -56,7 +58,7 @@ run_athena_query_no_results(bucket=os.getenv("S3_BUCKET_NAME"),
 
 # Read staging query
 with open("load.sql") as f:
-  QUERY = f.read()
+  QUERY = expand_macros(f.read())
 
 logger.info('Loading data into table')
 

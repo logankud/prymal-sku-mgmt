@@ -36,6 +36,7 @@ jobs:
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
           GLUE_DATABASE_NAME: ${{ secrets.GLUE_DATABASE_NAME }}
           GLUE_DATABASE_NAME_AGENT: ${{ secrets.GLUE_DATABASE_NAME_AGENT }}
+          CUSTOMER_KEY_SALT: ${{ secrets.CUSTOMER_KEY_SALT }}
           LOOKBACK: ${{ github.event.inputs.lookback_days }}
         run: |
           echo "====== Tier 1: raw API pulls (lookback=${LOOKBACK}d) ======"
@@ -115,6 +116,7 @@ jobs:
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
           GLUE_DATABASE_NAME: ${{ secrets.GLUE_DATABASE_NAME }}
           GLUE_DATABASE_NAME_AGENT: ${{ secrets.GLUE_DATABASE_NAME_AGENT }}
+          CUSTOMER_KEY_SALT: ${{ secrets.CUSTOMER_KEY_SALT }}
           LOOKBACK: ${{ github.event.inputs.lookback_days }}
         run: |
           echo "====== Tier 3: prymal_agent aggregations (lookback=${LOOKBACK}d) ======"

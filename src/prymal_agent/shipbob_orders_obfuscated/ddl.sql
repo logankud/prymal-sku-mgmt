@@ -1,5 +1,5 @@
 CREATE EXTERNAL TABLE IF NOT EXISTS prymal_agent.shipbob_all_line_item_obfuscated (
-  customer_hash                string COMMENT 'sha256(to_utf8(lower(customer_email))) – unique but not PII',
+  customer_key                 string COMMENT 'salted hash of the customer email - the join key to every other prymal_agent table. NULL when the order has no identifiable customer: an Amazon relay address (Amazon rotates these, so they are not a stable identity), an anonymised Shopify checkout, or a missing email. Never count distinct customers without excluding NULL',
   shipbob_order_id_hash        string COMMENT 'sha256(to_utf8(cast(shipbob_order_id as varchar))) – unique but not PII',
   customer_email_masked        string COMMENT '***@domain – preserves domain signal only',
   customer_name_masked         string COMMENT 'masked name – first initial only',

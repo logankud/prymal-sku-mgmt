@@ -75,6 +75,33 @@ def test_select_query_is_embeddable_in_ctas(path):
         f'{path} ends with ORDER BY, which is meaningless inside CTAS'
 
 
+@pytest.mark.parametrize('path', _sql_templates(), ids=lambda p: str(p.relative_to(AGENT_DIR)))
+def test_no_inline_email_hashing(path):
+    """customer_key must come from ${CUSTOMER_KEY(col)}. A hand-rolled hash in
+    one file is the failure mode this whole macro exists to prevent: it still
+    produces valid-looking hex, it just never joins."""
+    text = path.read_text()
+    inline = re.search(r'sha256\s*\([^)]*(?:email|customer)', text, re.IGNORECASE)
+    assert not inline, (
+        f'{path} hashes an email inline; use ${{CUSTOMER_KEY(<column>)}} instead')
+
+
+def test_every_workflow_that_derives_a_customer_key_passes_the_salt():
+    """Without CUSTOMER_KEY_SALT the job now fails loudly rather than writing
+    unsalted keys, so a missing secret would break the daily run."""
+    macro_jobs = {p.parent.name for p in AGENT_DIR.rglob('*.sql')
+                  if 'CUSTOMER_KEY(' in p.read_text()}
+    assert macro_jobs, 'expected at least one job to derive a customer key'
+
+    workflow = (REPO / '.github' / 'workflows' / 'agent_reports.yml').read_text()
+    for job in macro_jobs:
+        step = re.search(rf'- name: Run job - {job}\b.*?(?=\n      - |\Z)',
+                         workflow, re.DOTALL)
+        assert step, f'no workflow step found for {job}'
+        assert 'CUSTOMER_KEY_SALT' in step.group(0), \
+            f'{job} derives a customer key but its workflow step has no CUSTOMER_KEY_SALT'
+
+
 def test_agent_workflow_does_not_call_missing_main():
     """Every `python main.py` step in the agent workflow must run in a directory
     that actually has a main.py; config-only jobs go through the runner."""

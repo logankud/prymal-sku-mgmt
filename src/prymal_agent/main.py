@@ -36,12 +36,22 @@ def main():
         help=
         'Optional: partition date in YYYY-MM-DD format (defaults yesterday)')
 
+    parser.add_argument(
+        '--render-only',
+        action='store_true',
+        help='Print the SQL this job would run and exit without touching AWS')
+
     args = parser.parse_args()
 
     logger.info(f"Starting job with args: {args}")
 
     # Initialize job runner (pass partition_date so self.run_date is set correctly)
     runner = JobRunner(job_dir=args.job_dir, partition_date=args.partition_date)
+
+    if args.render_only:
+        for step, sql in runner.rendered_statements():
+            print(f'\n{"-" * 70}\n-- {step}\n{"-" * 70}\n{sql.strip()}')
+        return
 
     # Run the job
     runner.run_job(partition_date=args.partition_date)
