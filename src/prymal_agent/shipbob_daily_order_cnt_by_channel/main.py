@@ -17,12 +17,18 @@ logger.info(f'Current time: {current_ts}')
 run_date = (current_ts - timedelta(hours=24) - timedelta(days=1)).strftime("%Y-%m-%d")
 logger.info(f'Run date: {run_date}')
 
+# Every SQL file in this job may reference the bucket; resolve it from the
+# environment rather than hardcoding it in the templates.
+S3_BUCKET = os.getenv("S3_BUCKET_NAME")
+if not S3_BUCKET:
+  raise ValueError("S3_BUCKET_NAME environment variable is not set")
+
 # -----------------------------------------------
 # Create final table
 
 # Read DDL query
 with open("ddl.sql") as f:
-  QUERY = f.read().replace("${RUN_DATE}", run_date)
+  QUERY = f.read().replace("${RUN_DATE}", run_date).replace("${S3_BUCKET}", S3_BUCKET)
 
 logger.info('Creating final table (DDL)')
 
@@ -36,7 +42,7 @@ run_athena_query_no_results(bucket=os.getenv("S3_BUCKET_NAME"),
 
 # Read staging query
 with open("create_staging.sql") as f:
-  QUERY = f.read().replace("${RUN_DATE}", run_date).replace("${RUN_ID}", current_ts.strftime("%Y%m%d%H%M%S"))
+  QUERY = f.read().replace("${RUN_DATE}", run_date).replace("${RUN_ID}", current_ts.strftime("%Y%m%d%H%M%S")).replace("${S3_BUCKET}", S3_BUCKET)
 
 logger.info('Creating staging table')
 
@@ -64,7 +70,7 @@ run_athena_query_no_results(bucket=os.getenv("S3_BUCKET_NAME"),
 
 # Read insert query
 with open("add_partition_final.sql") as f:
-  QUERY = f.read().replace("${RUN_DATE}", run_date).replace("${RUN_ID}", current_ts.strftime("%Y%m%d%H%M%S"))
+  QUERY = f.read().replace("${RUN_DATE}", run_date).replace("${RUN_ID}", current_ts.strftime("%Y%m%d%H%M%S")).replace("${S3_BUCKET}", S3_BUCKET)
 
 logger.info('Add partition to the final table (pointing to the staging table)')
 

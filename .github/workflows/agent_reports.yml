@@ -95,7 +95,6 @@ jobs:
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
           GLUE_DATABASE_NAME: ${{ secrets.GLUE_DATABASE_NAME }}
           GLUE_DATABASE_NAME_AGENT: ${{ secrets.GLUE_DATABASE_NAME_AGENT }}
-        working-directory: src/prymal_agent/shipbob_current_inventory
-        run: python main.py
+        run: python3 src/prymal_agent/main.py --job_dir src/prymal_agent/shipbob_current_inventory
 
       - run: echo "Job status - ${{ job.status }}."

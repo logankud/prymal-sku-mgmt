@@ -17,6 +17,12 @@ run_date = (current_ts - timedelta(hours=24) -
 
 logger.info(f'Run date: {run_date}')
 
+# The DDL references the bucket; resolve it from the environment rather than
+# hardcoding it in the template.
+S3_BUCKET = os.getenv("S3_BUCKET_NAME")
+if not S3_BUCKET:
+  raise ValueError("S3_BUCKET_NAME environment variable is not set")
+
 # -----------------------------------------------
 # Drop final table
 
@@ -36,7 +42,7 @@ run_athena_query_no_results(bucket=os.getenv("S3_BUCKET_NAME"),
 
 # Read DDL query
 with open("ddl.sql") as f:
-  QUERY = f.read().replace("${RUN_DATE}", current_ts.strftime("%Y-%m-%d"))
+  QUERY = f.read().replace("${RUN_DATE}", current_ts.strftime("%Y-%m-%d")).replace("${S3_BUCKET}", S3_BUCKET)
 
 logger.info('Creating final table (DDL)')
 
