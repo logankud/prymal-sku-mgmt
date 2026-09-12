@@ -422,20 +422,13 @@ def latest_partition(table: str, database: str, region: str,
 def coerce_frame_to_ddl(df: pd.DataFrame, columns: List[Tuple[str, str]]) -> pd.DataFrame:
     """Render each column the way its declared Glue type can be read back.
 
-    The CSV is the only contract between this job and Athena, and pandas'
-    defaults break it in two ways that produce NULLs rather than errors:
+    Two pandas defaults write values Athena reads back as NULL rather than
+    rejecting, so both are corrected here:
 
-    bigint  - a column holding any null is upcast to float64 and written as
-              '111.0'. Athena reads bigint and yields NULL. Nullable Int64
-              writes '111' and an empty field instead.
-
-    timestamp - to_csv drops the time component from a datetime64 column when
-              every value is midnight, writing '2026-08-15'. A Hive timestamp
-              cannot parse a bare date, so it yields NULL. This is why
-              shopify_orders.order_date has been NULL in all 264,165 rows
-              while created_at, which always carries a time, has been fine.
-
-    Both are silent. Nothing fails, the column is simply empty in Athena.
+    bigint    - a column containing a null is upcast to float64 and written as
+                '111.0'. Nullable Int64 writes '111' and an empty field.
+    timestamp - to_csv omits the time component when every value is midnight,
+                writing a bare date that a Hive timestamp cannot parse.
     """
     df = df.copy()
     for name, type_ in columns:
@@ -454,14 +447,10 @@ def coerce_frame_to_ddl(df: pd.DataFrame, columns: List[Tuple[str, str]]) -> pd.
 
 
 class LocalS3Client:
-    """Stands in for the boto3 S3 client and writes objects under a local dir.
+    """Stands in for the boto3 S3 client, writing objects under a local dir.
 
-    The production key layout is preserved, so a dry-run output can be diffed
-    against a real partition file to check column order and values before
-    anything is written for real.
-
-    (src/shipbob/jobs.py has a private copy of this predating the shared one.
-    Collapsing the two is worth doing, but not inside a Shopify change.)
+    The S3 key becomes the path below `root`, so dry-run output can be diffed
+    against a real partition file. `Bucket` is accepted and ignored.
     """
 
     def __init__(self, root: str):
@@ -479,12 +468,14 @@ class LocalS3Client:
 
 
 def check_csv_against_ddl(csv_path: str, ddl_path: str, table: str) -> dict:
-    """Compare a written CSV's header to the DDL, and report on new columns.
+    """Compare a written CSV's header to the DDL and count populated columns.
 
-    This is the check a dry run exists for. The job writes headerless CSV in
-    production, so column order is never validated at load time - Athena just
-    reads field N into column N. Here the frame is written with its header, so
-    the ordering can be confirmed before the first real write.
+    Production CSV is headerless and read by field position, so column order is
+    never validated at load time. Dry-run output keeps its header, which makes
+    the comparison possible.
+
+    Returns a dict of row count, whether the header matches, both column lists,
+    and the non-null count per column.
     """
     expected = [name for name, _ in ddl_columns(ddl_path, table)]
     frame = pd.read_csv(csv_path)
@@ -506,10 +497,9 @@ def check_csv_against_ddl(csv_path: str, ddl_path: str, table: str) -> dict:
 class SchemaDriftError(RuntimeError):
     """A Glue table's columns cannot be reconciled by appending.
 
-    Raised rather than repaired, because the two ways this happens - a column
-    renamed or retyped in place, or a column inserted mid-list - both mean the
-    CSV files and the table definition disagree about what each field position
-    holds. Adding more columns on top would bury that, not fix it.
+    Means the table has a column renamed, retyped, or inserted mid-list, so the
+    existing files and the table definition already disagree about what each
+    field position holds. Needs a hand-written migration.
     """
 
 
@@ -520,9 +510,9 @@ DDL_COLUMN_BLOCK = (
 def ddl_columns(ddl_path: str, table: str) -> List[Tuple[str, str]]:
     """Parse (name, type) for one CREATE EXTERNAL TABLE block in a DDL file.
 
-    The checked-in DDL is the single source of truth for column order, and
-    tests assert the Pydantic models agree with it, so deriving the expected
-    schema from here keeps one definition rather than three.
+    Partition keys are excluded, since they are declared separately in Glue.
+    The DDL is the single source of truth for column order; tests assert the
+    Pydantic models agree with it.
     """
     text = open(ddl_path).read()
     match = re.search(DDL_COLUMN_BLOCK.format(table=re.escape(table)), text, re.S)
@@ -543,12 +533,10 @@ def ensure_table_columns(table: str, database: str, region: str, bucket: str,
                          expected: List[Tuple[str, str]]) -> List[str]:
     """Append any columns the table is missing, and return their names.
 
-    The extract writes headerless CSV, so Athena maps file position to column
-    position. Adding a field to the extract without adding it to the table
-    means the extra values are silently discarded; every run looks green and
-    the column is simply never populated. Rather than leave that to a
-    migration somebody has to remember to run, the job reconciles its own
-    schema on every run, the same way it already repairs its own partitions.
+    Columns are only ever appended, because the CSV is read by field position:
+    a column added anywhere but the end would shift every later value. If the
+    live table diverges from `expected` in any other way, raises
+    SchemaDriftError instead of adding on top of the mismatch.
 
     Idempotent: a no-op once the table matches.
     """
@@ -860,14 +848,11 @@ def send_sns_alert(message, topic_arn, subject, region):
 def shopify_order_record(order: dict) -> dict:
     """Flatten one Shopify order into the shopify_orders row.
 
-    Field order here is the CSV column order, which must match the Glue table.
-    New fields therefore go at the END - inserting one in the middle shifts
-    every later column in the file while the table definition stays put, and
-    Athena silently reads the wrong values into the wrong columns.
+    Key order is CSV column order and must match ddl.sql, so new fields are
+    appended, never inserted.
 
-    `order_id` is Shopify's `order_number`, not its internal `id`, because
-    order_number is what ShipBob records and what the two systems join on.
-    The internal id is kept separately as `shopify_order_id`.
+    `order_id` is Shopify's `order_number`, which is what ShipBob records and
+    what the two systems join on. The internal id is kept as `shopify_order_id`.
     """
     import pandas as pd
 
@@ -905,12 +890,11 @@ def shopify_order_record(order: dict) -> dict:
 def shopify_line_item_records(order: dict) -> List[dict]:
     """Flatten one Shopify order into its shopify_line_items rows.
 
-    `variant_id` is the durable product identity. sku, title and variant_title
-    are all merchant-editable: the same physical product has been sold under
-    several names, carries marketing text such as PRE-ORDER in its title, and
-    reuses or omits its sku. variant_id does not change.
+    `variant_id` is the durable product identity; sku, title and variant_title
+    are merchant-editable and change over time.
 
-    As with orders, new fields are appended rather than inserted.
+    Key order is CSV column order and must match ddl.sql, so new fields are
+    appended, never inserted.
     """
     created_at = order.get('created_at')
     order_id = order.get('order_number')

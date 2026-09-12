@@ -1,9 +1,8 @@
 """Glue schema reconciliation for the Shopify tables.
 
-Adding a column to the extract without adding it to the table is silent: the
-CSV is headerless, Athena reads the first N fields by position, and the extra
-values are discarded while every run reports success. These tests cover the
-step that closes that gap, and the case where it must refuse to act.
+The CSV is headerless and read by field position, so a column present in the
+extract but absent from the table is discarded without error. These tests cover
+the reconciliation step and the drift it must refuse to repair.
 """
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -160,8 +159,8 @@ def written_csv(df, columns):
 
 
 def test_nullable_bigint_is_not_written_as_a_float():
-    """A gift-card line has no variant. That one null upcasts the whole column
-    to float64, so variant_id would be written '111.0' and read back NULL."""
+    """A null in an id column upcasts it to float64, writing '111.0', which
+    Athena reads back as NULL."""
     df = pd.DataFrame({'variant_id': [111, None]})
     rows = written_csv(df, [('variant_id', 'bigint')])
     assert rows[1][1] == '111'
@@ -169,9 +168,8 @@ def test_nullable_bigint_is_not_written_as_a_float():
 
 
 def test_midnight_timestamp_keeps_its_time_component():
-    """to_csv drops the time when every value is midnight, writing a bare date
-    that a Hive timestamp cannot parse. This is the shopify_orders.order_date
-    bug: NULL in all 264,165 rows while created_at was fine."""
+    """to_csv omits the time when every value is midnight, writing a bare date
+    that a Hive timestamp cannot parse."""
     df = pd.DataFrame({'order_date': pd.to_datetime(['2026-08-15', '2026-08-16'])})
     rows = written_csv(df, [('order_date', 'timestamp')])
     assert rows[1][1] == '2026-08-15 00:00:00'

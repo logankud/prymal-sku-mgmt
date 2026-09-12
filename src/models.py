@@ -22,21 +22,16 @@ class ShopifyLineItem(BaseModel):
         None, description="Title of the product variant")
     line_item_name: str = Field(..., description="Name of the line item")
 
-    # --- appended 2026-09 ---
-    # Field order is CSV column order, which must match the Glue table, so new
-    # fields go at the end. Inserting one above shifts every later column in
-    # the file while the table definition stays put.
+    # Field order is CSV column order and must match ddl.sql, so new fields
+    # are appended, never inserted.
     variant_id: Optional[int] = Field(
         None,
-        description="Shopify variant ID. The durable product identity: sku, "
-                    "title and variant_title are all merchant-editable, this is not. "
-                    "Null for line items with no variant, such as gift cards")
+        description="Shopify variant ID. The durable product identity. Null "
+                    "for line items with no variant, such as gift cards")
     product_id: Optional[int] = Field(
         None, description="Shopify product ID that the variant belongs to")
     line_discount: float = Field(
-        0.0, ge=0,
-        description="Discount allocated to this line item, so line-level "
-                    "discounting no longer has to be inferred from the order total")
+        0.0, ge=0, description="Discount allocated to this line item")
 
     @field_validator('variant_id', 'product_id', mode='before')
     @classmethod
@@ -48,7 +43,6 @@ class ShopifyLineItem(BaseModel):
     @field_validator('line_discount', mode='before')
     @classmethod
     def default_missing_discount(cls, value):
-        # Shopify sends this as a string; absent on older payloads.
         if value is None or value == '' or (isinstance(value, float) and math.isnan(value)):
             return 0.0
         return value
@@ -128,18 +122,16 @@ class ShopifyOrder(BaseModel):
     order_date: datetime = Field(
         ..., description="Date when the order was placed in ISO format")
 
-    # --- appended 2026-09 ---
-    # Field order is CSV column order, which must match the Glue table, so new
-    # fields go at the end.
+    # Field order is CSV column order and must match ddl.sql, so new fields
+    # are appended, never inserted.
     shopify_order_id: Optional[int] = Field(
         None,
         description="Shopify's internal order id. Distinct from order_id, "
-                    "which is the human-facing order_number that ShipBob records "
-                    "and that the two systems join on")
+                    "which is the order_number that joins to ShipBob")
     customer_id: Optional[int] = Field(
         None,
-        description="Shopify customer id. A durable identity that survives an "
-                    "email change. Null for guest checkout")
+        description="Shopify customer id. Durable across email changes. "
+                    "Null for guest checkout")
     is_test: bool = Field(
         False, description="Shopify's own test-order flag")
     financial_status: Optional[str] = Field(
@@ -168,7 +160,6 @@ class ShopifyOrder(BaseModel):
     @field_validator('cancelled_at', mode='before')
     @classmethod
     def validate_nullable_datetime(cls, value):
-        # Most orders are not cancelled, so null is the common case.
         if value is None or value == '' or (isinstance(value, float) and math.isnan(value)):
             return None
         if isinstance(value, datetime):

@@ -1,9 +1,8 @@
 """Shopify order and line-item extraction.
 
-The failure these tests exist to prevent is silent. The job writes headerless
-CSV and Athena maps file position to column position, so a field added in the
-middle of a Pydantic model shifts every later value one column to the left in
-the table while the DDL stays put. Nothing errors; the data is just wrong.
+The job writes headerless CSV and Athena maps file position to column position,
+so a field added anywhere but the end of a Pydantic model shifts every later
+value into the wrong column without erroring. These tests pin that ordering.
 """
 import re
 from pathlib import Path
@@ -90,8 +89,8 @@ def test_extracted_line_item_keys_match_model_order():
 
 
 def test_new_columns_are_appended_not_inserted():
-    """History written before this change has fewer trailing fields. That is
-    only safe while the new columns sit at the end."""
+    """Existing partitions have fewer trailing fields, which only reads back
+    correctly while the new columns sit at the end."""
     for model, original_last in ((ShopifyOrder, 'order_date'),
                                  (ShopifyLineItem, 'line_item_name')):
         fields = list(model.model_fields)
@@ -119,8 +118,7 @@ def test_variant_and_product_ids_are_captured():
 
 
 def test_order_id_stays_the_order_number_that_joins_to_shipbob():
-    """ShipBob records order_number, so order_id must remain order_number.
-    Shopify's internal id is carried separately."""
+    """order_id must stay order_number, which is what joins to ShipBob."""
     record = shopify_order_record(ORDER)
     assert record['order_id'] == 266585
     assert record['shopify_order_id'] == 5544332211
@@ -137,8 +135,7 @@ def test_customer_id_and_test_flag_are_captured():
 
 
 def test_a_line_item_without_a_variant_is_kept():
-    """Gift cards have no variant. They must still produce a row, with a null
-    identity rather than a dropped line."""
+    """A line with no variant must still produce a row, with a null identity."""
     gift_card = shopify_line_item_records(ORDER)[1]
     assert gift_card['variant_id'] is None
     validated = ShopifyLineItem(**gift_card)
@@ -174,7 +171,7 @@ def test_uncancelled_order_has_null_cancelled_at():
 
 
 def test_absent_discount_defaults_to_zero():
-    """Older payloads omit total_discount entirely."""
+    """total_discount is absent on some payloads."""
     line = {**shopify_line_item_records(ORDER)[0]}
     del line['line_discount']
     assert ShopifyLineItem(**line, line_discount=None).line_discount == 0.0

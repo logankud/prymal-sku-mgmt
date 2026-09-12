@@ -73,54 +73,37 @@ def main():
     # Set aws region
     REGION = 'us-east-1'
 
-    # Get s3 bucket
-    s3_bucket = os.environ.get('S3_BUCKET_NAME')
-    if not s3_bucket:
-        raise ValueError("S3_BUCKET_NAME environment variable is not set")
+    def require(name):
+        value = os.environ.get(name)
+        if not value:
+            raise ValueError(f'{name} environment variable is not set')
+        return value
 
-    # Get Glue database
-    glue_database = os.getenv('GLUE_DATABASE_NAME')
-    if not glue_database:
-        raise ValueError("S3_BUCKET environment variable is not set")
+    # Required either way: both modes read from the Shopify API.
+    SHOPIFY_API_KEY = require('SHOPIFY_API_KEY')
+    SHOPIFY_API_PW = require('SHOPIFY_API_PW')
 
-    # Get s3 bucket
-    AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY')
-    if not s3_bucket:
-        raise ValueError("AWS_ACCESS_KEY environment variable is not set")
+    # A dry run writes to the local filesystem and calls no AWS service, so it
+    # requires no AWS configuration.
+    s3_bucket = glue_database = None
+    AWS_ACCESS_KEY_ID = AWS_SECRET_ACCESS_KEY = None
+    if not args.dry_run:
+        s3_bucket = require('S3_BUCKET_NAME')
+        glue_database = require('GLUE_DATABASE_NAME')
+        AWS_ACCESS_KEY_ID = require('AWS_ACCESS_KEY')
+        AWS_SECRET_ACCESS_KEY = require('AWS_ACCESS_SECRET')
 
-    # Get s3 bucket
-    AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_ACCESS_SECRET')
-    if not s3_bucket:
-        raise ValueError("AWS_ACCESS_SECRET environment variable is not set")
-
-    # Get shopify api key 
-    SHOPIFY_API_KEY = os.environ.get('SHOPIFY_API_KEY')
-    if not s3_bucket:
-        raise ValueError("SHOPIFY_API_KEY environment variable is not set")
-
-    # Get shopify api pw
-    SHOPIFY_API_PW = os.environ.get('SHOPIFY_API_PW')
-    if not s3_bucket:
-        raise ValueError("SHOPIFY_API_PASSWORD environment variable is not set")
-
-    # -----------------
-    # Reconcile the Glue schema before writing anything
-    # -----------------
-    # The CSV is headerless, so Athena maps file position to column position.
-    # If the extract writes a column the table does not declare, the value is
-    # silently discarded and the run still looks green. Reconciling here - the
-    # same way this job already repairs its own partitions - means a schema
-    # change ships with the code instead of waiting on someone to remember a
-    # migration. Idempotent, so it is a no-op on every run after the first.
     ddl_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ddl.sql')
 
     if args.dry_run:
-        # Write where a real partition would go, so the output is diffable
-        # against production, and touch no AWS service.
-        s3_bucket = args.dry_run
+        # --dry-run takes an optional directory and defaults to ./dryrun, so
+        # args.dry_run is that path. LocalS3Client writes each object under it
+        # using the S3 key, and ignores the bucket argument.
         s3_client = LocalS3Client(args.dry_run)
         logger.info(f'[dry-run] writing under {args.dry_run}, skipping Glue and Athena')
     else:
+        # Append any column the live table is missing, so a schema change
+        # ships with the code rather than as a separate migration. Idempotent.
         s3_client = boto3.client('s3',
                                  aws_access_key_id=AWS_ACCESS_KEY_ID,
                                  aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
